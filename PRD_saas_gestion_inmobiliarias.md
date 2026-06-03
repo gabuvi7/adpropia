@@ -1,6 +1,6 @@
-# PRD — GU-Props: Plataforma SaaS de Gestión Inmobiliaria
+# PRD — AdPropIA: Plataforma SaaS de Gestión Inmobiliaria
 
-**Producto:** GU-Props  
+**Producto:** AdPropIA  
 **Empresa:** GU Solutions  
 **Cliente piloto / primer tenant:** Vergani Propiedades  
 **Versión:** 1.0  
@@ -11,7 +11,7 @@
 
 ## 1. Resumen ejecutivo
 
-GU-Props es una plataforma SaaS multi-tenant para inmobiliarias pequeñas y medianas que necesitan centralizar la gestión de alquileres, propiedades, propietarios, inquilinos, contratos, pagos, ajustes por índices y liquidaciones.
+AdPropIA es una plataforma SaaS multi-tenant para inmobiliarias pequeñas y medianas que necesitan centralizar la gestión de alquileres, propiedades, propietarios, inquilinos, contratos, pagos, ajustes por índices y liquidaciones.
 
 El producto debe nacer como SaaS desde el día uno: una única plataforma reutilizable para múltiples inmobiliarias, donde cada cliente opera como un tenant independiente con sus propios usuarios, configuración, branding, documentos, caja y reportes.
 
@@ -30,7 +30,7 @@ Muchas inmobiliarias administran alquileres, pagos, contratos y liquidaciones us
 - Poco control sobre usuarios, permisos y acciones sensibles.
 - Procesos difíciles de escalar cuando crece la cantidad de propiedades o contratos.
 
-GU-Props busca resolver el core operativo de administración de alquileres con una solución web centralizada, segura, auditable y preparada para múltiples inmobiliarias.
+AdPropIA busca resolver el core operativo de administración de alquileres con una solución web centralizada, segura, auditable y preparada para múltiples inmobiliarias.
 
 ---
 
@@ -42,7 +42,7 @@ GU-Props busca resolver el core operativo de administración de alquileres con u
 - Mantener la propiedad intelectual del software en GU Solutions.
 - Generar ingresos recurrentes mediante suscripción mensual, setup inicial, add-ons y servicios complementarios.
 - Permitir sumar nuevas inmobiliarias sin reescribir la arquitectura.
-- Construir una base comercial escalable con planes Starter, Professional, Business y Enterprise.
+- Construir una base comercial escalable con planes Starter, Professional y Enterprise.
 
 ### 3.2 Objetivos de producto
 
@@ -307,8 +307,9 @@ El sistema debe ofrecer reportes de vencimientos, aumentos próximos, caja mensu
 
 ### 10.1 Seguridad
 
-- Autenticación mediante JWT o mecanismo equivalente.
-- El token debe incluir userId, tenantId activo y rol dentro del tenant.
+- Autenticación mediante Auth0 con JWT.
+- Auth0 debe manejar identidad, organizaciones, membresías e invitaciones; el backend debe resolver el tenant interno desde la organización de Auth0.
+- El token debe incluir usuario, organización activa y roles/permisos suficientes para resolver el tenant y el rol operativo dentro del backend.
 - Autorización mediante guards por rol.
 - URLs firmadas para documentos privados.
 - Secrets siempre fuera del repositorio.
@@ -349,16 +350,18 @@ El sistema debe ofrecer reportes de vencimientos, aumentos próximos, caja mensu
 
 La arquitectura recomendada para el MVP es:
 
-| Capa | Tecnología sugerida | Responsabilidad |
-| --- | --- | --- |
-| Frontend | Next.js + React + TypeScript en Vercel | App web, panel de gestión, formularios, reportes y experiencia multi-tenant. |
-| Backend | NestJS + TypeScript en Railway | API, lógica de negocio, permisos, caja, contratos, índices, liquidaciones y jobs. |
-| Base de datos | PostgreSQL administrado en Supabase | Persistencia relacional con separación por tenant_id. |
-| ORM | Prisma | Modelado tipado, migraciones y acceso a datos. |
-| Cache / jobs livianos | Upstash Redis | Cache, rate limit, locks y settings. |
-| Archivos | Cloudflare R2 | PDFs y documentos con URLs firmadas. |
-| CI/CD | GitHub Actions | Validaciones, tests, migraciones y deploy. |
-| Observabilidad | Sentry + logs centralizados | Errores, trazabilidad y monitoreo por tenant. |
+
+| Capa                  | Tecnología sugerida                    | Responsabilidad                                                                   |
+| --------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| Frontend              | Next.js + React + TypeScript en Vercel | App web, panel de gestión, formularios, reportes y experiencia multi-tenant.      |
+| Backend               | NestJS + TypeScript en Railway         | API, lógica de negocio, permisos, caja, contratos, índices, liquidaciones y jobs. |
+| Base de datos         | PostgreSQL administrado en Supabase    | Persistencia relacional con separación por tenant_id.                             |
+| ORM                   | Prisma                                 | Modelado tipado, migraciones y acceso a datos.                                    |
+| Cache / jobs livianos | Upstash Redis                          | Cache, rate limit, locks y settings.                                              |
+| Archivos              | Cloudflare R2                          | PDFs y documentos con URLs firmadas.                                              |
+| CI/CD                 | GitHub Actions                         | Validaciones, tests, migraciones y deploy.                                        |
+| Observabilidad        | Sentry + logs centralizados            | Errores, trazabilidad y monitoreo por tenant.                                     |
+
 
 ---
 
@@ -404,12 +407,14 @@ El producto se comercializa como SaaS bajo licencia de uso. GU Solutions conserv
 
 ### 13.2 Planes sugeridos
 
-| Plan | Cliente objetivo | Incluye resumido |
-| --- | --- | --- |
-| Starter | Inmobiliarias chicas | Usuarios y propiedades limitadas, PDFs básicos, reportes básicos, soporte por email. |
-| Professional | Inmobiliarias medianas | Más usuarios, más propiedades, branding, liquidaciones PDF, reportes completos y soporte prioritario. |
-| Business | Inmobiliarias con mayor volumen | Dominio custom, auditoría avanzada, templates personalizados y onboarding incluido. |
-| Enterprise | Clientes grandes | Límites a medida, SLA, integraciones, DB dedicada opcional y contrato personalizado. |
+
+| Plan         | Cliente objetivo                | Incluye resumido                                                                                      |
+| ------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Starter      | Inmobiliarias chicas            | Usuarios y propiedades limitadas, PDFs básicos, reportes básicos, soporte por email.                  |
+| Professional | Inmobiliarias medianas          | Más usuarios, más propiedades, branding, liquidaciones PDF, reportes completos y soporte prioritario. |
+| Business     | Inmobiliarias con mayor volumen | Dominio custom, auditoría avanzada, templates personalizados y onboarding incluido.                   |
+| Enterprise   | Clientes grandes                | Límites a medida, SLA, integraciones, DB dedicada opcional y contrato personalizado.                  |
+
 
 ---
 
@@ -427,16 +432,18 @@ El producto se comercializa como SaaS bajo licencia de uso. GU Solutions conserv
 
 ## 15. Riesgos y mitigaciones
 
-| Riesgo | Impacto | Mitigación |
-| --- | --- | --- |
-| Fuga de datos entre tenants | Crítico | Repositories tenant-aware, filtros obligatorios por tenant, tests de aislamiento y auditoría. |
-| Errores en caja, pagos o liquidaciones | Crítico | Transacciones atómicas, AuditLog, pruebas de integración y revisión de cálculos. |
-| Cambios o fallas en fuentes de índices | Alto | Patrón adapter, cache y fallback de carga manual. |
-| Cliente pide cesión de código | Alto comercial | Contrato SaaS claro: licencia de uso, no venta de propiedad intelectual. |
-| Customizaciones excesivas | Alto | Roadmap claro, add-ons definidos y cotización separada. |
-| Costos cloud crecen sin control | Medio | Límites por plan, monitoreo y add-ons por exceso de uso. |
-| Soporte consume demasiado tiempo | Medio | Onboarding claro, base de conocimiento y soporte diferenciado por plan. |
-| MVP intenta cubrir demasiadas features | Alto | Mantener foco en alquileres, caja, contratos, pagos y liquidaciones. |
+
+| Riesgo                                 | Impacto        | Mitigación                                                                                    |
+| -------------------------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| Fuga de datos entre tenants            | Crítico        | Repositories tenant-aware, filtros obligatorios por tenant, tests de aislamiento y auditoría. |
+| Errores en caja, pagos o liquidaciones | Crítico        | Transacciones atómicas, AuditLog, pruebas de integración y revisión de cálculos.              |
+| Cambios o fallas en fuentes de índices | Alto           | Patrón adapter, cache y fallback de carga manual.                                             |
+| Cliente pide cesión de código          | Alto comercial | Contrato SaaS claro: licencia de uso, no venta de propiedad intelectual.                      |
+| Customizaciones excesivas              | Alto           | Roadmap claro, add-ons definidos y cotización separada.                                       |
+| Costos cloud crecen sin control        | Medio          | Límites por plan, monitoreo y add-ons por exceso de uso.                                      |
+| Soporte consume demasiado tiempo       | Medio          | Onboarding claro, base de conocimiento y soporte diferenciado por plan.                       |
+| MVP intenta cubrir demasiadas features | Alto           | Mantener foco en alquileres, caja, contratos, pagos y liquidaciones.                          |
+
 
 ---
 
@@ -496,7 +503,7 @@ Entregables:
 
 ## 17. Preguntas abiertas
 
-- ¿Cuál será el nombre comercial definitivo: GU-Props, GU-Prop u otro?
+- ¿Cuál será el dominio principal del producto AdPropIA?
 - ¿Qué fuente oficial o proveedor se usará para IPC, ICL, UVA y otros índices?
 - ¿Qué nivel de carga histórica necesita Vergani Propiedades para el piloto?
 - ¿Qué formato tienen actualmente los datos: Excel, sistema anterior, carpetas físicas, PDFs?

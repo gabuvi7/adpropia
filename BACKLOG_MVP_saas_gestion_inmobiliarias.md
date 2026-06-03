@@ -1,6 +1,6 @@
-# Backlog MVP — GU-Props
+# Backlog MVP — AdPropIA
 
-**Producto:** GU-Props  
+**Producto:** AdPropIA  
 **Tipo:** Plataforma SaaS multi-tenant para gestión inmobiliaria  
 **Fuente principal:** `PRD_saas_gestion_inmobiliarias.md`  
 **Estado:** Backlog inicial para estimación y planificación
@@ -9,7 +9,7 @@
 
 ## 1. Objetivo del backlog
 
-Este backlog convierte el PRD de GU-Props en unidades funcionales ejecutables para construir el MVP. El foco es validar el core operativo con Vergani Propiedades como primer tenant, sin perder la capacidad de reutilizar la plataforma con otras inmobiliarias.
+Este backlog convierte el PRD de AdPropIA en unidades funcionales ejecutables para construir el MVP. El foco es validar el core operativo con Vergani Propiedades como primer tenant, sin perder la capacidad de reutilizar la plataforma con otras inmobiliarias.
 
 El MVP debe priorizar:
 

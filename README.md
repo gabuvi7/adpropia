@@ -1,4 +1,4 @@
-# GU-Props
+# AdPropIA
 
 Base SaaS multi-tenant para gestión de alquileres inmobiliarios.
 
@@ -24,7 +24,7 @@ pnpm test
 - El aislamiento por tenant es un requisito de producto, no un detalle de implementación. Las lecturas de negocio deben usar `id + tenantId`; NUNCA consultes una entidad de negocio solo por `id`.
 - Los índices económicos son globales; valores custom por tenant, documentos, pagos, contratos, propietarios, inquilinos, propiedades, liquidaciones, movimientos de caja y logs de auditoría son tenant-scoped.
 - Las páginas de App Router deben seguir siendo Server Components por defecto. Agregá `"use client"` solo en el límite interactivo más chico posible.
-- La futura protección de rutas por auth va en `apps/web/proxy.ts`, no en `middleware.ts`.
+- La futura protección de rutas por auth va en `apps/web/proxy.ts`, no en `middleware.ts`, y debe integrarse con Auth0.
 - Los cálculos de dinero usan unidades menores enteras (`centavos`) en los helpers TypeScript para evitar errores de punto flotante.
 
 ## Slice actual
@@ -33,14 +33,14 @@ Este slice agrega la primera base real de backend: límite del cliente Prisma, `
 
 ### Advertencia sobre contexto temporal de API
 
-Hasta que exista auth con JWT, la API incluye un puente de contexto por request solo para desarrollo/testing que lee estos headers:
+Hasta que exista auth con JWT de Auth0, la API incluye un puente de contexto por request solo para desarrollo/testing que lee estos headers:
 
 - `x-tenant-id` — obligatorio para operaciones tenant-scoped.
 - `x-user-id` — opcional; si falta, se usa un usuario temporal de desarrollo.
 - `x-role` — opcional; valores válidos: `OWNER`, `ADMIN`, `OPERATOR`, `READONLY`.
 - `x-request-id` — opcional para trazabilidad.
 
-Esto NO es autenticación productiva. Está deshabilitado intencionalmente con `NODE_ENV=production` y el header temporal `x-tenant-id` es solo para desarrollo/testing; JWT lo va a reemplazar antes de un deploy real.
+Esto NO es autenticación productiva. Está deshabilitado intencionalmente con `NODE_ENV=production` y el header temporal `x-tenant-id` es solo para desarrollo/testing; Auth0/JWT lo va a reemplazar antes de un deploy real.
 
 Ejemplo de cuerpo para crear un propietario:
 
