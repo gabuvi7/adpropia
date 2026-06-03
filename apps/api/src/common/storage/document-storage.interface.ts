@@ -1,7 +1,7 @@
 import type { Readable } from "node:stream";
 
 /**
- * Abstracción de almacenamiento de documentos para GU-Props.
+ * Abstracción de almacenamiento de documentos para AdPropIA.
  *
  * Convención de claves (`key`):
  *   `{tenantId}/{entityType}/{entityId}/{filename}.{ext}`

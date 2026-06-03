@@ -7,7 +7,7 @@ import type {
   LiquidationManualAdjustment,
   LiquidationStatus,
   Prisma
-} from "@gu-prop/database";
+} from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
 import { fromCents, toCents } from "../../common/money/decimal-cents";

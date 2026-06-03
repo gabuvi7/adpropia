@@ -3,7 +3,7 @@ import { AppShell } from "../components/shared/app-shell";
 
 export default function LandingPage() {
   return (
-    <AppShell tenantName="GU-Props">
+    <AppShell tenantName="AdPropIA">
       <section className="hero">
         <p className="eyebrow">Base SaaS multi-cliente</p>
         <h1>Gestión inmobiliaria con aislamiento por cliente desde el día uno.</h1>

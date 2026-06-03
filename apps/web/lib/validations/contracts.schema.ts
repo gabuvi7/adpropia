@@ -1,4 +1,4 @@
-import { currencies, economicIndexTypes, rentalContractStatuses } from "@gu-prop/shared";
+import { currencies, economicIndexTypes, rentalContractStatuses } from "@adpropia/shared";
 import { z } from "zod";
 
 export const contractSchema = z.object({

@@ -1,4 +1,4 @@
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 
 const roleRank: Record<TenantRole, number> = {
   READONLY: 0,

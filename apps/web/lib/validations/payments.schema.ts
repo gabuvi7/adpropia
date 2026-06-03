@@ -1,4 +1,4 @@
-import { currencies } from "@gu-prop/shared";
+import { currencies } from "@adpropia/shared";
 import { z } from "zod";
 
 export const paymentSchema = z.object({

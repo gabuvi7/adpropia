@@ -1,17 +1,17 @@
 {
-  "name": "gu-prop",
+  "name": "adpropia",
   "version": "0.1.0",
   "private": true,
-  "description": "GU-Props SaaS multi-tenant real estate management platform.",
+  "description": "AdPropIA — SaaS multi-tenant real estate management platform.",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "dev": "pnpm --parallel --filter @gu-prop/api --filter @gu-prop/web dev",
+    "dev": "pnpm --parallel --filter @adpropia/api --filter @adpropia/web dev",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:unit": "pnpm -r test:unit",
-    "db:generate": "pnpm --filter @gu-prop/database prisma:generate",
-    "db:migrate": "pnpm --filter @gu-prop/database prisma:migrate"
+    "db:generate": "pnpm --filter @adpropia/database prisma:generate",
+    "db:migrate": "pnpm --filter @adpropia/database prisma:migrate"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { Readable } from "stream";
-import type { Currency, LiquidationAdjustmentSign } from "@gu-prop/database";
+import type { Currency, LiquidationAdjustmentSign } from "@adpropia/database";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types

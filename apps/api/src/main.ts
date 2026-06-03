@@ -20,7 +20,7 @@ async function bootstrap(): Promise<void> {
   const port = Number(config.get<string>("API_PORT") ?? config.get<string>("PORT") ?? defaultPort);
 
   await app.listen(port);
-  console.info(`API de GU-Props escuchando en http://localhost:${port}`);
+  console.info(`API de AdPropIA escuchando en http://localhost:${port}`);
   console.info(`Storage de documentos en ${storageBasePath}`);
 }
 

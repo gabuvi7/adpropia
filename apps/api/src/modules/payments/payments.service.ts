@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { CashMovement, Currency, Payment, Prisma } from "@gu-prop/database";
-import { allocatePaymentAmount, money } from "@gu-prop/shared";
+import type { CashMovement, Currency, Payment, Prisma } from "@adpropia/database";
+import { allocatePaymentAmount, money } from "@adpropia/shared";
 import { fromCents, toCents } from "../../common/money/decimal-cents";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";

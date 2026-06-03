@@ -7,7 +7,7 @@ import type {
   Prisma,
   RentalContract,
   RentalContractStatus
-} from "@gu-prop/database";
+} from "@adpropia/database";
 import { fromCents, toCents } from "../../common/money/decimal-cents";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";

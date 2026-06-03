@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma, TenantStatus } from "@gu-prop/database";
+import type { Prisma, TenantStatus } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import type { CreateTenantDto } from "./tenants.dto";
 

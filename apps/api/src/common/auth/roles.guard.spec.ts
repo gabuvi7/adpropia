@@ -1,6 +1,6 @@
 import { Logger, type ExecutionContext } from "@nestjs/common";
 import type { Reflector } from "@nestjs/core";
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RequestContextService } from "../request-context/request-context.service";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";

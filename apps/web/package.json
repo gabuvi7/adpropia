@@ -1,5 +1,5 @@
 {
-  "name": "@gu-prop/web",
+  "name": "@adpropia/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test:unit": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@gu-prop/shared": "workspace:*",
+    "@adpropia/shared": "workspace:*",
     "@tanstack/react-query": "^5.64.1",
     "next": "^15.1.4",
     "react": "^19.0.0",

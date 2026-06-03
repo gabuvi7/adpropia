@@ -6,7 +6,7 @@ import {
   Logger
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 import { RequestContextService } from "../request-context/request-context.service";
 import { hasMinimumRole } from "./permissions";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";

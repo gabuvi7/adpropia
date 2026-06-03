@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 import type { RequestContext } from "./request-context";
 
 type HeaderValue = string | string[] | undefined;

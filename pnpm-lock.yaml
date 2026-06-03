@@ -26,10 +26,10 @@ importers:
 
   apps/api:
     dependencies:
-      '@gu-prop/database':
+      '@adpropia/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@gu-prop/shared':
+      '@adpropia/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@nestjs/common':
@@ -90,7 +90,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@gu-prop/shared':
+      '@adpropia/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@tanstack/react-query':

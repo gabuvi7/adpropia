@@ -1,4 +1,4 @@
-import type { LiquidationStatus } from "@gu-prop/database";
+import type { LiquidationStatus } from "@adpropia/database";
 
 export type StateTransition = {
   from: LiquidationStatus;

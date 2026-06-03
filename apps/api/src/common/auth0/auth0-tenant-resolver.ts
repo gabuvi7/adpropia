@@ -1,5 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 import { PrismaService } from "../prisma/prisma.service";
 
 export type Auth0JwtClaims = {

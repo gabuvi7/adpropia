@@ -1,5 +1,5 @@
 import { SetMetadata } from "@nestjs/common";
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 
 /**
  * Clave de metadata utilizada por `RolesGuard` para leer la lista de roles

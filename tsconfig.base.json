@@ -14,10 +14,10 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@gu-prop/shared": ["packages/shared/src/index.ts"],
-      "@gu-prop/shared/*": ["packages/shared/src/*"],
-      "@gu-prop/database": ["packages/database/src/index.ts"],
-      "@gu-prop/database/*": ["packages/database/src/*"]
+      "@adpropia/shared": ["packages/shared/src/index.ts"],
+      "@adpropia/shared/*": ["packages/shared/src/*"],
+      "@adpropia/database": ["packages/database/src/index.ts"],
+      "@adpropia/database/*": ["packages/database/src/*"]
     }
   }
 }

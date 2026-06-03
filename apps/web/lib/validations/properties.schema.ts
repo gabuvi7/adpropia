@@ -1,4 +1,4 @@
-import { propertyStatuses, propertyTypes } from "@gu-prop/shared";
+import { propertyStatuses, propertyTypes } from "@adpropia/shared";
 import { z } from "zod";
 
 export const propertySchema = z.object({

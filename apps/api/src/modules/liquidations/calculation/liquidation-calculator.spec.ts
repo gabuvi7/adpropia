@@ -1,4 +1,4 @@
-import type { Currency, LiquidationAdjustmentSign } from "@gu-prop/database";
+import type { Currency, LiquidationAdjustmentSign } from "@adpropia/database";
 import { describe, expect, it } from "vitest";
 import {
   type CalculatorAdjustment,

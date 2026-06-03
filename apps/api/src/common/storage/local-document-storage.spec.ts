@@ -22,7 +22,7 @@ describe("LocalDocumentStorage", () => {
   let storage: LocalDocumentStorage;
 
   beforeEach(() => {
-    basePath = mkdtempSync(join(tmpdir(), "gu-prop-storage-"));
+    basePath = mkdtempSync(join(tmpdir(), "adpropia-storage-"));
     storage = new LocalDocumentStorage(basePath);
   });
 

@@ -1,21 +1,21 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: gu-prop-postgres
+    container_name: adpropia-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: gu_prop
+      POSTGRES_DB: adpropia
     ports:
       - "5433:5432"
     volumes:
-      - gu-prop-postgres-data:/var/lib/postgresql/data
+      - adpropia-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d gu_prop"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d adpropia"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  gu-prop-postgres-data:
+  adpropia-postgres-data:

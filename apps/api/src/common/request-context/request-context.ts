@@ -1,4 +1,4 @@
-import type { TenantRole } from "@gu-prop/shared";
+import type { TenantRole } from "@adpropia/shared";
 
 export type RequestContext = Readonly<{
   requestId: string;

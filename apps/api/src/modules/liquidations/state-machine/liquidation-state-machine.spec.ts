@@ -1,4 +1,4 @@
-import type { LiquidationStatus } from "@gu-prop/database";
+import type { LiquidationStatus } from "@adpropia/database";
 import { describe, expect, it } from "vitest";
 import { LiquidationStateMachine } from "./liquidation-state-machine";
 
