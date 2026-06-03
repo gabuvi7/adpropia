@@ -2,6 +2,8 @@ import { type MiddlewareConsumer, Module, type NestModule } from "@nestjs/common
 import { ConfigModule } from "@nestjs/config";
 import { RequestContextModule } from "./common/request-context/request-context.module";
 import { TemporaryHeaderRequestContextMiddleware } from "./common/request-context/request-context.middleware";
+import { Auth0Module } from "./common/auth0/auth0.module";
+import { Auth0JwtMiddleware } from "./common/auth0/auth0-jwt.middleware";
 import { AuditModule } from "./modules/audit/audit.module";
 import { ContractsModule } from "./modules/contracts/contracts.module";
 import { LiquidationsModule } from "./modules/liquidations/liquidations.module";
@@ -24,6 +26,17 @@ export const appModules = [
   AuditModule
 ] as const;
 
+const protectedRoutes = [
+  "owners",
+  "renters",
+  "properties",
+  "contracts",
+  "payments",
+  "cash-movements",
+  "reports",
+  "liquidations"
+] as const;
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -31,23 +44,17 @@ export const appModules = [
       cache: true
     }),
     RequestContextModule,
+    Auth0Module,
     ...appModules
   ]
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    // TEMPORAL: solo para desarrollo/testing hasta reemplazar headers por JWT auth.
+    // Auth0JwtMiddleware runs first: validates JWT, resolves tenant, populates context.
+    // In non-production it falls through to TemporaryHeaderRequestContextMiddleware when
+    // no Bearer token is present.
     consumer
-      .apply(TemporaryHeaderRequestContextMiddleware)
-      .forRoutes(
-        "owners",
-        "renters",
-        "properties",
-        "contracts",
-        "payments",
-        "cash-movements",
-        "reports",
-        "liquidations"
-      );
+      .apply(Auth0JwtMiddleware, TemporaryHeaderRequestContextMiddleware)
+      .forRoutes(...protectedRoutes);
   }
 }

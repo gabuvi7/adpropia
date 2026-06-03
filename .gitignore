@@ -19,3 +19,7 @@ coverage/
 # Prisma/local databases
 *.db
 *.db-journal
+
+
+.atl/*
+skill-registry.md

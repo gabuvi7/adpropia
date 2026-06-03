@@ -25,7 +25,9 @@ export type {
   Renter,
   Tenant,
   TenantSettings,
-  TenantStatus
+  TenantStatus,
+  TenantUser,
+  User
 } from "@prisma/client";
 
 export type PrismaCompatibleClient = PrismaClient;

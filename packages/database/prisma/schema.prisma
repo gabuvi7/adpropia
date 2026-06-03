@@ -91,6 +91,7 @@ enum Currency {
 
 model Tenant {
   id           String       @id @default(cuid())
+  auth0OrgId   String?      @unique
   name         String
   slug         String       @unique
   status       TenantStatus @default(ACTIVE)
@@ -120,6 +121,7 @@ model Tenant {
 
 model User {
   id           String   @id @default(cuid())
+  auth0UserId  String?  @unique
   email        String   @unique
   name         String?
   passwordHash String?

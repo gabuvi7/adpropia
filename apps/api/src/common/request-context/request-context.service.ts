@@ -1,9 +1,16 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import type { TenantRole } from "@gu-prop/shared";
 import type { RequestContext } from "./request-context";
 
 type HeaderValue = string | string[] | undefined;
 type RequestHeaders = Record<string, HeaderValue>;
+
+export type JwtResolution = {
+  userId: string;
+  tenantId: string;
+  role: TenantRole;
+};
 
 const tenantRoles = ["OWNER", "ADMIN", "OPERATOR", "READONLY"] as const;
 
@@ -50,6 +57,19 @@ export class RequestContextService {
 
   getOptional(): RequestContext | undefined {
     return this.storage.getStore();
+  }
+
+  /**
+   * Construye contexto desde la resolucion JWT de Auth0.
+   * Usado por Auth0JwtMiddleware para poblar el contexto.
+   */
+  fromJwtResolution(resolution: JwtResolution, requestId: string): RequestContext {
+    return {
+      requestId,
+      userId: resolution.userId,
+      tenantId: resolution.tenantId,
+      role: resolution.role
+    };
   }
 
   /**
