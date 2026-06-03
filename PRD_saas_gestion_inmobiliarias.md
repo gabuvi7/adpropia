@@ -40,7 +40,7 @@ AdPropIA busca resolver el core operativo de administración de alquileres con u
 
 - Validar el modelo SaaS con al menos una inmobiliaria usando datos reales en producción.
 - Mantener la propiedad intelectual del software en GU Solutions.
-- Generar ingresos recurrentes mediante suscripción mensual, setup inicial, add-ons y servicios complementarios.
+- Generar ingresos recurrentes mediante suscripción mensual, onboarding asistido, add-ons y servicios complementarios.
 - Permitir sumar nuevas inmobiliarias sin reescribir la arquitectura.
 - Construir una base comercial escalable con planes Starter, Professional y Enterprise.
 
@@ -301,6 +301,18 @@ El sistema debe registrar acciones sensibles con usuario, tenant, entidad, fecha
 
 El sistema debe ofrecer reportes de vencimientos, aumentos próximos, caja mensual, saldos pendientes y actividad por propiedad.
 
+### RF-013 — Resolución de tenant con Auth0
+
+El sistema debe integrar Auth0 Organizations para identidad, membresías e invitaciones. Cada organización de Auth0 debe mapearse a un tenant interno mediante `auth0_org_id`, y el backend debe resolver el `tenant_id` operativo antes de ejecutar cualquier operación de negocio.
+
+### RF-014 — Usuarios multi-tenant
+
+Un usuario puede pertenecer a una o más inmobiliarias. Cuando pertenezca a más de una, el sistema debe permitir seleccionar el tenant activo y validar que el usuario tenga membresía y rol vigente en ese tenant.
+
+### RF-015 — Operaciones financieras reversibles
+
+Los pagos, movimientos de caja y liquidaciones no deben eliminarse físicamente una vez confirmados. El sistema debe permitir anular, revertir o ajustar operaciones mediante movimientos compensatorios auditables.
+
 ---
 
 ## 10. Requerimientos no funcionales
@@ -319,11 +331,18 @@ El sistema debe ofrecer reportes de vencimientos, aumentos próximos, caja mensu
 - Todas las tablas de negocio deben incluir tenant_id.
 - Los archivos deben almacenarse bajo prefijos por tenant.
 - Los repositories del backend deben ser tenant-aware.
+- Las consultas de entidades de negocio deben usar `tenant_id + id`; queda prohibido consultar entidades tenant-scoped solo por `id`.
+- Las tablas tenant-scoped deben priorizar índices compuestos que incluyan `tenant_id`.
+- Deben existir pruebas automatizadas de aislamiento que verifiquen que un tenant no pueda leer, modificar, eliminar ni descargar datos de otro tenant.
+- La validación de tenant debe ocurrir en la capa de casos de uso/repositories, no solo en controllers o frontend.
 
 ### 10.3 Auditoría y trazabilidad
 
 - Logs con tenantId, userId, requestId, endpoint y acción.
 - AuditLog para operaciones críticas.
+- Las operaciones financieras deben conservar estado: borrador, confirmado y anulado cuando aplique.
+- Los comprobantes, recibos y liquidaciones deben tener numeración o correlativo por tenant cuando el flujo operativo lo requiera.
+- Los cambios sensibles de monto, contrato, pago, rol o configuración deben guardar valores anteriores, valores nuevos, usuario responsable, fecha y motivo cuando corresponda.
 
 ### 10.4 Disponibilidad y operación
 
@@ -398,7 +417,7 @@ El producto se comercializa como SaaS bajo licencia de uso. GU Solutions conserv
 
 ### 13.1 Conceptos de cobro
 
-- Setup inicial.
+- Onboarding asistido inicial.
 - Suscripción mensual.
 - Add-ons.
 - Customizaciones.
@@ -414,6 +433,50 @@ El producto se comercializa como SaaS bajo licencia de uso. GU Solutions conserv
 | Professional | Inmobiliarias medianas          | Más usuarios, más propiedades, branding, liquidaciones PDF, reportes completos y soporte prioritario. |
 | Business     | Inmobiliarias con mayor volumen | Dominio custom, auditoría avanzada, templates personalizados y onboarding incluido.                   |
 | Enterprise   | Clientes grandes                | Límites a medida, SLA, integraciones, DB dedicada opcional y contrato personalizado.                  |
+
+### 13.3 Hipótesis inicial de pricing
+
+Los precios deben validarse con el piloto y primeros clientes pagos. Para evitar pérdida de valor por inflación, la referencia comercial puede expresarse en USD o equivalente en moneda local al momento de facturación.
+
+| Plan         | Precio mensual sugerido | Onboarding asistido sugerido | Límites iniciales orientativos                                      |
+| ------------ | ----------------------- | ----------------------------- | ------------------------------------------------------------------- |
+| Starter      | USD 49                  | USD 300                       | Hasta 3 usuarios, 50 propiedades, 100 contratos activos, 1 tenant.  |
+| Professional | USD 99                  | USD 600                       | Hasta 8 usuarios, 200 propiedades, 400 contratos activos, branding. |
+| Business     | USD 199                 | USD 1.000                     | Hasta 20 usuarios, 600 propiedades, dominio custom, soporte prioritario. |
+| Enterprise   | Desde USD 399           | A cotizar                     | Límites a medida, SLA, integraciones, DB dedicada opcional.         |
+
+El setup debe comunicarse como onboarding asistido, no como cargo técnico por crear una cuenta. El valor comercial está en ayudar al cliente a empezar a operar correctamente: configuración inicial, carga o migración de datos, parametrización de reglas, capacitación y acompañamiento de las primeras operaciones reales.
+
+### 13.4 Roadmap de onboarding y autoservicio
+
+El objetivo de producto es que AdPropIA tienda progresivamente al autoservicio. Sin embargo, durante el MVP y los primeros clientes pagos, el onboarding debe ser asistido para reducir errores de carga, acelerar adopción y validar procesos reales.
+
+| Fase | Modelo de onboarding | Qué incluye | Criterio de avance |
+| --- | --- | --- | --- |
+| Fase 1 — MVP piloto | Asistido y cobrado | Alta de tenant, usuarios, roles, configuración operativa, carga inicial, capacitación y acompañamiento de primeras liquidaciones/pagos. | El equipo entiende qué datos, reglas y fricciones aparecen en operaciones reales. |
+| Fase 2 — Primeros clientes pagos | Repetible y semi-asistido | Checklist de implementación, templates base, importación guiada desde Excel, documentación de soporte y onboarding por plan. | Dos o más tenants pueden ser dados de alta siguiendo el mismo proceso sin cambios estructurales. |
+| Fase 3 — Producto empaquetado | Semi-automático | Wizard de onboarding, importadores, validaciones de datos, configuración de branding y roles por la inmobiliaria. | Starter puede activarse con intervención mínima; Professional/Business mantienen opción de onboarding pago. |
+| Fase 4 — Escala | Autoservicio por defecto | Alta de cuenta, selección de plan, invitación de usuarios, carga inicial guiada, upgrade de plan y add-ons desde la plataforma. | Los tenants pequeños pueden empezar solos; el onboarding asistido queda como servicio premium. |
+
+El onboarding asistido puede bonificarse total o parcialmente ante contratación anual prepaga, sin eliminar su valor económico: se cambia trabajo de implementación por compromiso comercial.
+
+### 13.5 Add-ons y servicios complementarios
+
+- Carga inicial o migración de datos desde Excel, sistema anterior o archivos históricos.
+- Templates PDF personalizados por tenant.
+- Dominio custom si no está incluido en el plan.
+- Usuarios, propiedades o contratos adicionales por bloque.
+- Soporte premium, capacitación y onboarding asistido.
+- Integraciones futuras: WhatsApp, email transaccional, facturación electrónica, contabilidad o portales externos.
+
+### 13.6 Decisiones comerciales no negociables
+
+- AdPropIA se comercializa como SaaS, no como desarrollo a medida por cliente.
+- GU Solutions conserva la propiedad intelectual y no entrega código fuente como parte de la suscripción.
+- Cada tenant conserva la propiedad de sus datos.
+- Las customizaciones fuera del producto base se cotizan por separado.
+- El onboarding asistido es un servicio de implementación operativa; no debe confundirse con una limitación técnica del producto.
+- Todo nuevo requerimiento debe evaluarse como feature reutilizable, add-on o servicio profesional antes de incorporarse al roadmap base.
 
 
 ---
@@ -470,7 +533,9 @@ Objetivo: formalizar planes, onboarding, soporte y límites de uso.
 
 Entregables:
 
-- Setup repetible.
+- Onboarding asistido repetible.
+- Checklist de implementación por tenant.
+- Primeros importadores o carga guiada desde planillas.
 - Plantillas PDF mejoradas.
 - Mejoras de reportes.
 - Documentación de soporte.
@@ -483,6 +548,8 @@ Objetivo: reducir fricción de venta e implementación.
 Entregables:
 
 - Onboarding más automatizado.
+- Wizard de onboarding para configuración inicial.
+- Validaciones de datos para reducir errores de carga.
 - Features por plan.
 - Add-ons iniciales.
 - Reportes avanzados.
@@ -495,6 +562,7 @@ Entregables:
 
 - Portal de propietarios.
 - Portal de inquilinos.
+- Onboarding autoservicio para planes Starter.
 - WhatsApp/notificaciones.
 - Integraciones.
 - Planes Enterprise.
@@ -513,7 +581,6 @@ Entregables:
 - ¿Se requiere soporte multi-moneda desde el inicio o solo moneda local?
 - ¿Qué políticas de backup y retención de datos se ofrecerán contractualmente?
 - ¿Qué términos legales específicos debe incluir el contrato SaaS?
-- ¿Cuál será el dominio principal del producto?
 - ¿Qué límites concretos tendrá cada plan en la primera versión comercial?
 
 ---
@@ -529,7 +596,21 @@ El MVP se considerará validado cuando:
 - Se calculen o registren ajustes por índice con trazabilidad.
 - No existan fugas de datos entre tenants en pruebas de aislamiento.
 - GU Solutions pueda crear un segundo tenant sin cambios estructurales mayores.
-- Exista una propuesta comercial clara con setup, suscripción y propiedad intelectual protegida.
+- Exista una propuesta comercial clara con onboarding asistido, suscripción y propiedad intelectual protegida.
+
+### 18.1 Criterios mínimos por módulo
+
+| Módulo | Criterio mínimo de aceptación |
+| --- | --- |
+| Auth y tenants | Un usuario puede autenticarse, pertenecer a un tenant, tener un rol y operar solo sobre datos permitidos. |
+| Propietarios, inquilinos y propiedades | Se pueden crear, editar, listar, consultar y dar de baja lógica entidades siempre filtradas por tenant. |
+| Contratos | Se puede crear un contrato activo con propiedad, propietario, inquilino, vigencia, monto, moneda, vencimiento e índice de ajuste. |
+| Pagos y caja | Se pueden registrar pagos totales y parciales, generar movimientos de caja y conservar trazabilidad financiera. |
+| Liquidaciones | Se puede generar una liquidación de propietario con comisión, neto a pagar y comprobante PDF utilizable. |
+| Índices | Se puede aplicar o cargar manualmente un índice con trazabilidad del cálculo usado. |
+| Documentos | Los PDFs se almacenan bajo prefijo de tenant y se acceden mediante URLs firmadas o mecanismo equivalente. |
+| Auditoría | Las acciones sensibles registran tenant, usuario, entidad, acción, fecha y contexto mínimo. |
+| Aislamiento | Las pruebas automatizadas demuestran que no hay lectura ni modificación cruzada entre tenants. |
 
 ---
 
