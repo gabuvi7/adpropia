@@ -73,6 +73,16 @@ describe("LocalDocumentStorage", () => {
         storage.save("/etc/passwd", Buffer.from("x"))
       ).rejects.toThrow("La ruta del documento no es válida.");
     });
+
+    it("ignora metadata opcional y persiste igual", async () => {
+      const key = "tenant-1/liquidations/liq-3/doc.pdf";
+      const data = Buffer.from("con metadata", "utf8");
+
+      await storage.save(key, data, { mimeType: "application/pdf" });
+
+      const fullPath = join(basePath, key);
+      expect(readFileSync(fullPath)).toEqual(data);
+    });
   });
 
   describe("read", () => {
