@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type { Prisma, RentalContract, RentalContractStatus } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 import type { CreateContractDto, UpdateContractDto } from "./contracts.dto";
 
 export type ContractRecord = RentalContract;
@@ -10,15 +11,28 @@ export type ContractRecord = RentalContract;
 export class ContractsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    private readonly audit: AuditService
   ) {}
 
   async createContract(input: CreateContractDto): Promise<ContractRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     await this.ensureRelationsBelongToTenant(input.propertyId, input.ownerId, input.renterId, tenantId);
 
     try {
-      return await this.prisma.rentalContract.create({ data: toContractCreateData(input, tenantId) });
+      return await this.prisma.$transaction(async (tx) => {
+        const contract = await tx.rentalContract.create({ data: toContractCreateData(input, tenantId) });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "contract",
+          entityId: contract.id,
+          action: "contract.created",
+          metadata: { propertyId: input.propertyId, ownerId: input.ownerId, renterId: input.renterId }
+        });
+
+        return contract;
+      });
     } catch {
       throw new BadRequestException("No pudimos crear el contrato. Revisá los datos enviados.");
     }
@@ -48,7 +62,8 @@ export class ContractsService {
   }
 
   async updateContract(id: string, input: UpdateContractDto): Promise<ContractRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     const contract = await this.findContract(id, tenantId);
 
     if (!contract) {
@@ -61,9 +76,21 @@ export class ContractsService {
     await this.ensureRelationsBelongToTenant(propertyId, ownerId, renterId, tenantId);
 
     try {
-      return await this.prisma.rentalContract.update({
-        where: { id_tenantId: { id, tenantId } },
-        data: toContractUpdateData(input)
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.rentalContract.update({
+          where: { id_tenantId: { id, tenantId } },
+          data: toContractUpdateData(input)
+        });
+
+        const changedFields = buildChangedFields(input);
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "contract",
+          entityId: id,
+          action: "contract.updated",
+          metadata: { changedFields }
+        });
+
+        return updated;
       });
     } catch {
       throw new BadRequestException("No pudimos actualizar el contrato. Revisá los datos enviados.");
@@ -71,12 +98,24 @@ export class ContractsService {
   }
 
   async changeContractStatus(id: string, status: RentalContractStatus): Promise<ContractRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
 
     try {
-      return await this.prisma.rentalContract.update({
-        where: { id_tenantId: { id, tenantId } },
-        data: { status }
+      return await this.prisma.$transaction(async (tx) => {
+        const contract = await tx.rentalContract.update({
+          where: { id_tenantId: { id, tenantId } },
+          data: { status }
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "contract",
+          entityId: id,
+          action: "contract.status.changed",
+          metadata: { newStatus: status }
+        });
+
+        return contract;
       });
     } catch (error) {
       if (hasPrismaCode(error, "P2025")) {
@@ -157,4 +196,15 @@ function toDate(value: string): Date {
 
 function hasPrismaCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
+/**
+ * Builds a list of changed field keys from the update input.
+ * Excludes relation IDs (propertyId, ownerId, renterId) to avoid leaking
+ * cross-entity references in audit metadata. Based on provided keys only
+ * (no raw DTO dumping or operator-precedence-prone date comparisons).
+ */
+function buildChangedFields(input: UpdateContractDto): string[] {
+  const excludeKeys = new Set(["propertyId", "ownerId", "renterId"]);
+  return Object.keys(input).filter((k) => !excludeKeys.has(k));
 }

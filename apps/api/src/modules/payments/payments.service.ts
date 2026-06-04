@@ -4,6 +4,7 @@ import { allocatePaymentAmount, money } from "@adpropia/shared";
 import { fromCents, toCents } from "../../common/money/decimal-cents";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 import type { CreatePaymentDto, ListCashMovementsQueryDto, ListPaymentsQueryDto } from "./payments.dto";
 
 export type PaymentRecord = Payment;
@@ -23,7 +24,8 @@ export type ContractBalance = {
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    private readonly audit: AuditService
   ) {}
 
   async createPayment(input: CreatePaymentDto): Promise<PaymentRecord> {
@@ -92,6 +94,14 @@ export class PaymentsService {
             }
           });
         }
+
+        const ctx = this.contextService.get();
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "payment",
+          entityId: created.id,
+          action: "payment.created",
+          metadata: { contractId: input.contractId, status: allocation.status, currency: input.currency }
+        });
 
         return created;
       });

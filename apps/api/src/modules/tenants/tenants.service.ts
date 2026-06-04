@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, TenantStatus } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
+import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 import type { CreateTenantDto } from "./tenants.dto";
 
 export type TenantSummary = Readonly<{ id: string; slug: string; name: string; status: TenantStatus }>;
@@ -8,7 +10,11 @@ export type TenantWithSettings = Prisma.TenantGetPayload<{ include: { settings: 
 
 @Injectable()
 export class TenantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly contextService: RequestContextService
+  ) {}
 
   async createTenant(input: CreateTenantDto): Promise<TenantWithSettings> {
     const settingsData = {
@@ -22,15 +28,29 @@ export class TenantsService {
         : {})
     };
 
+    const ctx = this.contextService.get();
+
     try {
-      return await this.prisma.tenant.create({
-        data: {
-          name: input.name,
-          slug: input.slug,
-          ...(input.customDomain !== undefined ? { customDomain: input.customDomain } : {}),
-          settings: { create: settingsData }
-        },
-        include: { settings: true }
+      return await this.prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: {
+            name: input.name,
+            slug: input.slug,
+            ...(input.customDomain !== undefined ? { customDomain: input.customDomain } : {}),
+            settings: { create: settingsData }
+          },
+          include: { settings: true }
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          tenantId: tenant.id,
+          entityType: "tenant",
+          entityId: tenant.id,
+          action: "tenant.created",
+          metadata: { slug: tenant.slug, name: tenant.name }
+        });
+
+        return tenant;
       });
     } catch (error) {
       if (hasPrismaCode(error, "P2002")) {

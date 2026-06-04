@@ -31,6 +31,7 @@ import type {
   PreviewLiquidationDto,
   UpdateLiquidationDraftDto
 } from "./liquidations.dto";
+import { AuditService } from "../audit/audit.service";
 
 const DUPLICATE_ACTIVE_MESSAGE = "Ya existe una liquidación activa para este propietario, período y moneda.";
 const ACTIVE_STATUSES: ReadonlyArray<LiquidationStatus> = ["DRAFT", "ISSUED", "PAID"];
@@ -75,7 +76,8 @@ export class LiquidationsService {
     private readonly calculator: LiquidationCalculator,
     private readonly stateMachine: LiquidationStateMachine,
     @Inject(PDF_RENDERER) private readonly pdfRenderer: PdfRenderer,
-    @Inject(DOCUMENT_STORAGE) private readonly storage: DocumentStorage
+    @Inject(DOCUMENT_STORAGE) private readonly storage: DocumentStorage,
+    private readonly audit: AuditService
   ) {}
 
   // ─── Public API ────────────────────────────────────────────────────────────
@@ -184,6 +186,21 @@ export class LiquidationsService {
             data: adjustmentInputs.map((adj) => toManualAdjustmentCreateData(adj, liquidation.id, tenantId, createdById))
           });
         }
+
+        const ctx = this.contextService.get();
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "liquidation",
+          entityId: liquidation.id,
+          action: "liquidation.created",
+          metadata: {
+            ownerId: input.ownerId,
+            periodStart: input.periodStart,
+            periodEnd: input.periodEnd,
+            currency: input.currency,
+            lineItemsCount: calculation.lineItems.length,
+            adjustmentsCount: adjustmentInputs.length
+          }
+        });
 
         return liquidation;
       });
@@ -294,14 +311,16 @@ export class LiquidationsService {
       throw new BadRequestException(validation.message);
     }
 
+    const fromStatus = liquidation.status;
+
     switch (input.status) {
       case "ISSUED":
-        return this.transitionToIssued(liquidation, tenantId, userId ?? null);
+        return this.transitionToIssued(liquidation, tenantId, userId ?? null, fromStatus);
       case "PAID":
-        return this.transitionToPaid(liquidation, tenantId, userId ?? null);
+        return this.transitionToPaid(liquidation, tenantId, userId ?? null, fromStatus);
       case "VOIDED":
         // El validator ya garantizó voidReason no-vacío.
-        return this.transitionToVoided(liquidation, tenantId, input.voidReason as string);
+        return this.transitionToVoided(liquidation, tenantId, input.voidReason as string, fromStatus);
       case "DRAFT":
       default:
         // El validator ya rechaza DRAFT como destino, pero el switch debe ser exhaustivo.
@@ -346,6 +365,14 @@ export class LiquidationsService {
         where: { id_tenantId: { id: liquidationId, tenantId } },
         data: { netAmount: newNetAmount }
       });
+
+      const ctx = this.contextService.get();
+      await this.audit.createEntryWithClient(tx, ctx, {
+        entityType: "liquidation",
+        entityId: liquidationId,
+        action: "liquidation.adjustment.added",
+        metadata: { concept: input.concept, amount: input.amount, sign: input.sign }
+      });
     });
 
     return this.loadLiquidationOrThrow(liquidationId, tenantId);
@@ -384,6 +411,14 @@ export class LiquidationsService {
       await tx.liquidation.update({
         where: { id_tenantId: { id: liquidationId, tenantId } },
         data: { netAmount: newNetAmount }
+      });
+
+      const ctx = this.contextService.get();
+      await this.audit.createEntryWithClient(tx, ctx, {
+        entityType: "liquidation",
+        entityId: liquidationId,
+        action: "liquidation.adjustment.removed",
+        metadata: { adjustmentId }
       });
     });
 
@@ -523,7 +558,8 @@ export class LiquidationsService {
   private async transitionToIssued(
     liquidation: LiquidationWithRelations,
     tenantId: string,
-    userId: string | null
+    userId: string | null,
+    fromStatus: LiquidationStatus
   ): Promise<LiquidationWithRelations> {
     const { storageKey, fileName } = this.computePdfLocation(tenantId, liquidation.id);
     const renderInput = await this.buildPdfInput(liquidation, tenantId);
@@ -576,6 +612,14 @@ export class LiquidationsService {
           }
         });
 
+        const ctx = this.contextService.get();
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "liquidation",
+          entityId: liquidation.id,
+          action: "liquidation.status.changed",
+          metadata: { from: fromStatus, to: "ISSUED" }
+        });
+
         const updated = await tx.liquidation.findUnique({
           where: { id_tenantId: { id: liquidation.id, tenantId } },
           include: { lineItems: true, manualAdjustments: true }
@@ -605,7 +649,7 @@ export class LiquidationsService {
    * REQ-008.
    *
    * Concurrencia: el `updateMany` con `status: "ISSUED"` en el WHERE garantiza que
-   * sólo UN request gane la carrera. Si `count === 0`, recargamos:
+   * sólo UN request gane la carrera. Si `count === 0`:
    *   - si quedó `PAID` → idempotente, return sin crear CashMovement.
    *   - si quedó otro status → BadRequest (alguien la anuló entre medio).
    * Esto evita duplicar OWNER_PAYOUT si dos requests leen `ISSUED` en simultáneo.
@@ -613,7 +657,8 @@ export class LiquidationsService {
   private async transitionToPaid(
     liquidation: LiquidationWithRelations,
     tenantId: string,
-    userId: string | null
+    userId: string | null,
+    fromStatus: LiquidationStatus
   ): Promise<LiquidationWithRelations> {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -651,6 +696,14 @@ export class LiquidationsService {
         }
       });
 
+      const ctx = this.contextService.get();
+      await this.audit.createEntryWithClient(tx, ctx, {
+        entityType: "liquidation",
+        entityId: liquidation.id,
+        action: "liquidation.status.changed",
+        metadata: { from: fromStatus, to: "PAID" }
+      });
+
       const updated = await tx.liquidation.findUnique({
         where: { id_tenantId: { id: liquidation.id, tenantId } },
         include: { lineItems: true, manualAdjustments: true }
@@ -666,14 +719,27 @@ export class LiquidationsService {
   private async transitionToVoided(
     liquidation: LiquidationWithRelations,
     tenantId: string,
-    voidReason: string
+    voidReason: string,
+    fromStatus: LiquidationStatus
   ): Promise<LiquidationWithRelations> {
-    const updated = await this.prisma.liquidation.update({
-      where: { id_tenantId: { id: liquidation.id, tenantId } },
-      data: { status: "VOIDED", voidedAt: new Date(), voidReason },
-      include: { lineItems: true, manualAdjustments: true }
+    const ctx = this.contextService.get();
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.liquidation.update({
+        where: { id_tenantId: { id: liquidation.id, tenantId } },
+        data: { status: "VOIDED", voidedAt: new Date(), voidReason },
+        include: { lineItems: true, manualAdjustments: true }
+      });
+
+      await this.audit.createEntryWithClient(tx, ctx, {
+        entityType: "liquidation",
+        entityId: liquidation.id,
+        action: "liquidation.status.changed",
+        metadata: { from: fromStatus, to: "VOIDED" }
+      });
+
+      return updated as LiquidationWithRelations;
     });
-    return updated as LiquidationWithRelations;
   }
 
   /**

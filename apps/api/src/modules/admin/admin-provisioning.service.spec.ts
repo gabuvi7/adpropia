@@ -1,6 +1,8 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { PrismaService } from "../../common/prisma";
+import type { RequestContextService } from "../../common/request-context/request-context.service";
+import type { AuditService } from "../audit/audit.service";
 import { AdminProvisioningService } from "./admin-provisioning.service";
 
 function createPrismaMock(): PrismaService {
@@ -12,8 +14,26 @@ function createPrismaMock(): PrismaService {
   } as unknown as PrismaService;
 }
 
-function buildService(prisma: PrismaService): AdminProvisioningService {
-  return new AdminProvisioningService(prisma);
+function createAuditMock(): AuditService {
+  return {
+    createEntry: vi.fn().mockResolvedValue({}),
+    createEntryWithClient: vi.fn().mockResolvedValue({})
+  } as unknown as AuditService;
+}
+
+function createContextMock(): RequestContextService {
+  return {
+    get: () => ({ requestId: "req-1", userId: "user-1", tenantId: "tenant-1", role: "ADMIN" }),
+    getOptional: () => ({ requestId: "req-1", userId: "user-1", tenantId: "tenant-1", role: "ADMIN" })
+  } as unknown as RequestContextService;
+}
+
+function buildService(
+  prisma: PrismaService,
+  audit: AuditService = createAuditMock(),
+  context: RequestContextService = createContextMock()
+): AdminProvisioningService {
+  return new AdminProvisioningService(prisma, audit, context);
 }
 
 const MOCK_TENANT_RESULT = {
@@ -49,22 +69,33 @@ describe("AdminProvisioningService", () => {
   describe("linkTenantAuth0Org", () => {
     it("links an existing tenant to an unused Auth0 org ID and returns the updated tenant mapping", async () => {
       const prisma = createPrismaMock();
-      vi.mocked(prisma.tenant.update).mockResolvedValue(MOCK_TENANT_RESULT as never);
-      const service = buildService(prisma);
+      const audit = createAuditMock();
+      const tx = { tenant: { update: vi.fn().mockResolvedValue(MOCK_TENANT_RESULT as never) } };
+      vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+        async (callback: (tx: unknown) => unknown) => callback(tx)
+      );
+      const service = buildService(prisma, audit);
 
       const result = await service.linkTenantAuth0Org("tenant-1", "org_abc123");
 
       expect(result).toEqual({ tenant: MOCK_TENANT_RESULT });
-      expect(prisma.tenant.update).toHaveBeenCalledWith({
+      expect(tx.tenant.update).toHaveBeenCalledWith({
         where: { id: "tenant-1" },
         data: { auth0OrgId: "org_abc123" },
         select: { id: true, name: true, slug: true, status: true, auth0OrgId: true }
       });
+      expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ tenantId: "tenant-1" }),
+        { tenantId: "tenant-1", entityType: "tenant", entityId: "tenant-1", action: "admin-provisioning.auth0-org.linked" }
+      );
     });
 
     it("throws NotFoundException when the tenant does not exist (P2025)", async () => {
       const prisma = createPrismaMock();
-      vi.mocked(prisma.tenant.update).mockRejectedValue(createPrismaError("P2025") as never);
+      vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockRejectedValue(
+        createPrismaError("P2025") as never
+      );
       const service = buildService(prisma);
 
       await expect(service.linkTenantAuth0Org("nonexistent", "org_xyz")).rejects.toThrow(NotFoundException);
@@ -72,7 +103,9 @@ describe("AdminProvisioningService", () => {
 
     it("throws ConflictException when the Auth0 org ID is already linked to another tenant (P2002)", async () => {
       const prisma = createPrismaMock();
-      vi.mocked(prisma.tenant.update).mockRejectedValue(createPrismaError("P2002") as never);
+      vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockRejectedValue(
+        createPrismaError("P2002") as never
+      );
       const service = buildService(prisma);
 
       await expect(service.linkTenantAuth0Org("tenant-2", "org_abc123")).rejects.toThrow(ConflictException);
@@ -82,22 +115,33 @@ describe("AdminProvisioningService", () => {
   describe("linkUserAuth0Subject", () => {
     it("links an existing user to an unused Auth0 subject and returns the updated user mapping", async () => {
       const prisma = createPrismaMock();
-      vi.mocked(prisma.user.update).mockResolvedValue(MOCK_USER_RESULT as never);
-      const service = buildService(prisma);
+      const audit = createAuditMock();
+      const tx = { user: { update: vi.fn().mockResolvedValue(MOCK_USER_RESULT as never) } };
+      vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+        async (callback: (tx: unknown) => unknown) => callback(tx)
+      );
+      const service = buildService(prisma, audit);
 
       const result = await service.linkUserAuth0Subject("user-1", "auth0|abc123");
 
       expect(result).toEqual({ user: MOCK_USER_RESULT });
-      expect(prisma.user.update).toHaveBeenCalledWith({
+      expect(tx.user.update).toHaveBeenCalledWith({
         where: { id: "user-1" },
         data: { auth0UserId: "auth0|abc123" },
         select: { id: true, email: true, name: true, isActive: true, auth0UserId: true }
       });
+      expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ userId: "user-1" }),
+        { entityType: "user", entityId: "user-1", action: "admin-provisioning.auth0-subject.linked" }
+      );
     });
 
     it("throws NotFoundException when the user does not exist (P2025)", async () => {
       const prisma = createPrismaMock();
-      vi.mocked(prisma.user.update).mockRejectedValue(createPrismaError("P2025") as never);
+      vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockRejectedValue(
+        createPrismaError("P2025") as never
+      );
       const service = buildService(prisma);
 
       await expect(service.linkUserAuth0Subject("nonexistent", "auth0|xyz")).rejects.toThrow(NotFoundException);
@@ -105,7 +149,9 @@ describe("AdminProvisioningService", () => {
 
     it("throws ConflictException when the Auth0 subject is already linked to another user (P2002)", async () => {
       const prisma = createPrismaMock();
-      vi.mocked(prisma.user.update).mockRejectedValue(createPrismaError("P2002") as never);
+      vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockRejectedValue(
+        createPrismaError("P2002") as never
+      );
       const service = buildService(prisma);
 
       await expect(service.linkUserAuth0Subject("user-2", "auth0|abc123")).rejects.toThrow(ConflictException);
@@ -122,15 +168,16 @@ describe("AdminProvisioningService", () => {
       vi.useRealTimers();
     });
 
-    it("creates a membership with acceptedAt set to current server time", async () => {
+    it("creates a membership with acceptedAt set to current server time and writes audit inside transaction", async () => {
       const prisma = createPrismaMock();
+      const audit = createAuditMock();
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue({ id: "tenant-1" } as never);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1" } as never);
       vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
         async (callback: (tx: unknown) => unknown) => callback(prisma)
       );
       vi.mocked(prisma.tenantUser.upsert).mockResolvedValue(MOCK_MEMBERSHIP_RESULT as never);
-      const service = buildService(prisma);
+      const service = buildService(prisma, audit);
 
       const result = await service.provisionMembership({
         tenantId: "tenant-1",
@@ -155,10 +202,16 @@ describe("AdminProvisioningService", () => {
         },
         select: { id: true, tenantId: true, userId: true, role: true, isActive: true, acceptedAt: true }
       });
+      expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ tenantId: "tenant-1" }),
+        expect.objectContaining({ tenantId: "tenant-1", action: "admin-provisioning.membership.provisioned" })
+      );
     });
 
     it("updates an existing membership role and acceptedAt", async () => {
       const prisma = createPrismaMock();
+      const audit = createAuditMock();
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue({ id: "tenant-1" } as never);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1" } as never);
       vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
@@ -166,7 +219,7 @@ describe("AdminProvisioningService", () => {
       );
       const updatedMembership = { ...MOCK_MEMBERSHIP_RESULT, role: "ADMIN" };
       vi.mocked(prisma.tenantUser.upsert).mockResolvedValue(updatedMembership as never);
-      const service = buildService(prisma);
+      const service = buildService(prisma, audit);
 
       const result = await service.provisionMembership({
         tenantId: "tenant-1",
