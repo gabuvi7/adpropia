@@ -2,8 +2,7 @@ import { Module } from "@nestjs/common";
 import { PrismaModule } from "../../common/prisma";
 import { RequestContextModule } from "../../common/request-context/request-context.module";
 import { DOCUMENT_STORAGE } from "../../common/storage/document-storage.interface";
-import { createLocalDocumentStorage } from "../../common/storage/local-document-storage";
-import { resolveStorageBasePath } from "../../common/storage/storage.config";
+import { createDocumentStorageFromEnv } from "../../common/storage/document-storage.factory";
 import { LiquidationCalculator } from "./calculation/liquidation-calculator";
 import { LiquidationStateMachine } from "./state-machine/liquidation-state-machine";
 import { PDF_RENDERER } from "./pdf/pdf-renderer";
@@ -22,7 +21,7 @@ import { ManualAdjustmentsController } from "./manual-adjustments.controller";
     { provide: PDF_RENDERER, useFactory: () => new PdfKitLiquidationRenderer() },
     {
       provide: DOCUMENT_STORAGE,
-      useFactory: () => createLocalDocumentStorage(resolveStorageBasePath())
+      useFactory: () => createDocumentStorageFromEnv(process.env)
     }
   ],
   exports: [LiquidationsService]

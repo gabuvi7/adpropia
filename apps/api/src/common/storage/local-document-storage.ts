@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, normalize, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Injectable } from "@nestjs/common";
-import type { DocumentStorage } from "./document-storage.interface";
+import type { DocumentStorage, DocumentStorageSaveMetadata } from "./document-storage.interface";
 
 /**
  * Implementación dev/MVP de `DocumentStorage` que persiste archivos en disco
@@ -14,7 +14,7 @@ import type { DocumentStorage } from "./document-storage.interface";
 export class LocalDocumentStorage implements DocumentStorage {
   constructor(private readonly basePath: string) {}
 
-  async save(key: string, content: Readable | Buffer): Promise<void> {
+  async save(key: string, content: Readable | Buffer, _metadata?: DocumentStorageSaveMetadata): Promise<void> {
     this.assertValidKey(key);
     const fullPath = join(this.basePath, key);
     await fs.mkdir(dirname(fullPath), { recursive: true });

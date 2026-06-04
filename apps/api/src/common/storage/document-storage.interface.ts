@@ -1,5 +1,7 @@
 import type { Readable } from "node:stream";
 
+export type DocumentStorageSaveMetadata = { mimeType?: string };
+
 /**
  * Abstracción de almacenamiento de documentos para AdPropIA.
  *
@@ -18,8 +20,9 @@ export interface DocumentStorage {
   /**
    * Guarda contenido bajo la clave indicada. Crea directorios padre si hace falta.
    * Acepta tanto un `Buffer` (contenido en memoria) como un `Readable` (stream).
+   * Opcionalmente acepta metadatos como mimeType.
    */
-  save(key: string, content: Readable | Buffer): Promise<void>;
+  save(key: string, content: Readable | Buffer, metadata?: DocumentStorageSaveMetadata): Promise<void>;
 
   /**
    * Devuelve un `Readable` con el contenido del documento.

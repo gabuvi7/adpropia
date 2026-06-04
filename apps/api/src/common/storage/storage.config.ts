@@ -46,21 +46,51 @@ export async function ensureStorageBasePath(basePath: string): Promise<void> {
 }
 
 /**
- * NOTA DE INYECCIÓN (Batch 6 — `LiquidationsModule`):
- *
- * Cuando se cree el `LiquidationsModule`, registrar el provider así:
- *
- *   import { DOCUMENT_STORAGE } from "../../common/storage/document-storage.interface";
- *   import { LocalDocumentStorage } from "../../common/storage/local-document-storage";
- *   import { resolveStorageBasePath } from "../../common/storage/storage.config";
- *
- *   {
- *     provide: DOCUMENT_STORAGE,
- *     useFactory: () => new LocalDocumentStorage(resolveStorageBasePath())
- *   }
- *
- * Y consumirlo con `@Inject(DOCUMENT_STORAGE) storage: DocumentStorage`.
- *
- * En `main.ts` se debería invocar `ensureStorageBasePath(resolveStorageBasePath())`
- * antes de `app.listen` para fallar rápido si el directorio no es escribible.
+ * R2 / S3-compatible storage config env vars.
  */
+export const R2_ENDPOINT_ENV = "R2_ENDPOINT";
+export const R2_BUCKET_ENV = "R2_BUCKET_NAME";
+export const R2_REGION_ENV = "R2_REGION";
+export const R2_ACCESS_KEY_ID_ENV = "R2_ACCESS_KEY_ID";
+export const R2_SECRET_ACCESS_KEY_ENV = "R2_SECRET_ACCESS_KEY";
+
+export const STORAGE_PROVIDER_ENV = "STORAGE_PROVIDER";
+
+export interface R2StorageConfig {
+  endpoint: string;
+  bucket: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+/**
+ * Validates that all required R2 environment variables are present and non-empty.
+ * Throws with a descriptive message listing the missing variable(s).
+ */
+export function validateR2Config(env: NodeJS.ProcessEnv = process.env): R2StorageConfig {
+  const missing: string[] = [];
+
+  const endpoint = env[R2_ENDPOINT_ENV] ?? "";
+  if (!endpoint) missing.push(R2_ENDPOINT_ENV);
+
+  const bucket = env[R2_BUCKET_ENV] ?? "";
+  if (!bucket) missing.push(R2_BUCKET_ENV);
+
+  const region = env[R2_REGION_ENV] ?? "";
+  if (!region) missing.push(R2_REGION_ENV);
+
+  const accessKeyId = env[R2_ACCESS_KEY_ID_ENV] ?? "";
+  if (!accessKeyId) missing.push(R2_ACCESS_KEY_ID_ENV);
+
+  const secretAccessKey = env[R2_SECRET_ACCESS_KEY_ENV] ?? "";
+  if (!secretAccessKey) missing.push(R2_SECRET_ACCESS_KEY_ENV);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `R2 storage configuration error: missing required env vars: ${missing.join(", ")}`,
+    );
+  }
+
+  return { endpoint, bucket, region, accessKeyId, secretAccessKey };
+}

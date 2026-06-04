@@ -56,6 +56,11 @@ export const TENANTS_PERMISSIONS = {
   create: ["OWNER"] as const
 } as const satisfies Record<string, ReadonlyArray<TenantRole>>;
 
+/** Permisos compartidos para admin/provisioning endpoints (OWNER-only). */
+export const ADMIN_PROVISIONING_PERMISSIONS = {
+  manage: ["OWNER"] as const
+} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+
 /**
  * Matriz declarativa de permisos para Liquidaciones (US-025/US-026, REQ-013).
  *
