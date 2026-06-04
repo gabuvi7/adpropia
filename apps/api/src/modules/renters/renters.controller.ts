@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { RequiresRole } from "../../common/auth/roles.decorator";
+import { CORE_ENTITY_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
 import { createRenterSchema, updateRenterSchema } from "./renters.dto";
 import { RentersService } from "./renters.service";
@@ -8,21 +10,25 @@ export class RentersController {
   constructor(private readonly rentersService: RentersService) {}
 
   @Post()
+  @RequiresRole(...CORE_ENTITY_PERMISSIONS.create)
   create(@Body() body: unknown) {
     return this.rentersService.createRenter(parseRequestBody(createRenterSchema, body));
   }
 
   @Get()
+  @RequiresRole(...CORE_ENTITY_PERMISSIONS.list)
   list() {
     return this.rentersService.listRenters();
   }
 
   @Get(":id")
+  @RequiresRole(...CORE_ENTITY_PERMISSIONS.read)
   getById(@Param("id") id: string) {
     return this.rentersService.getRenterById(id);
   }
 
   @Patch(":id")
+  @RequiresRole(...CORE_ENTITY_PERMISSIONS.update)
   update(@Param("id") id: string, @Body() body: unknown) {
     return this.rentersService.updateRenter(id, parseRequestBody(updateRenterSchema, body));
   }

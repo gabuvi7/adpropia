@@ -20,6 +20,42 @@ export function assertMinimumRole(currentRole: TenantRole, minimumRole: TenantRo
 /** Roles disponibles, ordenados de mayor privilegio a menor. */
 export const ALL_ROLES: readonly TenantRole[] = ["OWNER", "ADMIN", "OPERATOR", "READONLY"] as const;
 
+/** Permisos compartidos para módulos de entidades core (propietarios, inquilinos, propiedades, contratos). */
+export const CORE_ENTITY_PERMISSIONS = {
+  list: ["READONLY"] as const,
+  read: ["READONLY"] as const,
+  create: ["OPERATOR"] as const,
+  update: ["OPERATOR"] as const
+} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+
+/** Permisos compartidos para el módulo de pagos. */
+export const PAYMENTS_PERMISSIONS = {
+  list: ["READONLY"] as const,
+  read: ["READONLY"] as const,
+  balance: ["READONLY"] as const,
+  create: ["OPERATOR"] as const
+} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+
+/** Permisos compartidos para cash-movements. */
+export const CASH_MOVEMENTS_PERMISSIONS = {
+  list: ["READONLY"] as const
+} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+
+/** Permisos compartidos para reportes. */
+export const REPORTS_PERMISSIONS = {
+  renterHistory: ["READONLY"] as const,
+  upcomingDuePayments: ["READONLY"] as const,
+  cashFlow: ["READONLY"] as const,
+  outstandingBalances: ["READONLY"] as const
+} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+
+/** Permisos compartidos para tenants (administración). */
+export const TENANTS_PERMISSIONS = {
+  list: ["ADMIN"] as const,
+  read: ["ADMIN"] as const,
+  create: ["OWNER"] as const
+} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+
 /**
  * Matriz declarativa de permisos para Liquidaciones (US-025/US-026, REQ-013).
  *

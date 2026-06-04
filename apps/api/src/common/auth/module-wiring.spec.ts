@@ -1,0 +1,214 @@
+import "reflect-metadata";
+import { describe, expect, it } from "vitest";
+import { AppModule } from "../../app.module";
+import { LiquidationsModule } from "../../modules/liquidations/liquidations.module";
+import {
+  CORE_ENTITY_PERMISSIONS,
+  PAYMENTS_PERMISSIONS,
+  CASH_MOVEMENTS_PERMISSIONS,
+  REPORTS_PERMISSIONS,
+  TENANTS_PERMISSIONS
+} from "./permissions";
+import { REQUIRES_ROLE_KEY } from "./roles.decorator";
+import { ContractsController } from "../../modules/contracts/contracts.controller";
+import { OwnersController } from "../../modules/owners/owners.controller";
+import { RentersController } from "../../modules/renters/renters.controller";
+import { PropertiesController } from "../../modules/properties/properties.controller";
+import { PaymentsController } from "../../modules/payments/payments.controller";
+import { CashMovementsController } from "../../modules/payments/cash-movements.controller";
+import { ReportsController } from "../../modules/reports/reports.controller";
+import { TenantsController } from "../../modules/tenants/tenants.controller";
+
+describe("Module wiring", () => {
+  it("AppModule declares APP_GUARD in its providers", () => {
+    const providers: unknown[] = Reflect.getMetadata("providers", AppModule) ?? [];
+    const appGuardProvider = providers.find(
+      (p: unknown) =>
+        typeof p === "object" &&
+        p !== null &&
+        "provide" in (p as Record<string, unknown>) &&
+        (p as Record<string, unknown>).provide === "APP_GUARD"
+    );
+    expect(appGuardProvider).toBeDefined();
+  });
+
+  it("LiquidationsModule does NOT declare APP_GUARD in its providers", () => {
+    const providers: unknown[] = Reflect.getMetadata("providers", LiquidationsModule) ?? [];
+    const appGuardProvider = providers.find(
+      (p: unknown) =>
+        typeof p === "object" &&
+        p !== null &&
+        "provide" in (p as Record<string, unknown>) &&
+        (p as Record<string, unknown>).provide === "APP_GUARD"
+    );
+    expect(appGuardProvider).toBeUndefined();
+  });
+});
+
+describe("@RequiresRole metadata inventory", () => {
+  describe("ContractsController", () => {
+    it("create → CORE_ENTITY_PERMISSIONS.create", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.create))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.create]);
+    });
+
+    it("list → CORE_ENTITY_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.list))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
+    });
+
+    it("listActive → CORE_ENTITY_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.listActive))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
+    });
+
+    it("getById → CORE_ENTITY_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.getById))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.read]);
+    });
+
+    it("update → CORE_ENTITY_PERMISSIONS.update", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.update))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.update]);
+    });
+
+    it("changeStatus → [ADMIN]", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.changeStatus))
+        .toEqual(["ADMIN"]);
+    });
+  });
+
+  describe("OwnersController", () => {
+    it("create → CORE_ENTITY_PERMISSIONS.create", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.create))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.create]);
+    });
+
+    it("list → CORE_ENTITY_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.list))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
+    });
+
+    it("getById → CORE_ENTITY_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.getById))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.read]);
+    });
+
+    it("update → CORE_ENTITY_PERMISSIONS.update", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.update))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.update]);
+    });
+  });
+
+  describe("RentersController", () => {
+    it("create → CORE_ENTITY_PERMISSIONS.create", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.create))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.create]);
+    });
+
+    it("list → CORE_ENTITY_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.list))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
+    });
+
+    it("getById → CORE_ENTITY_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.getById))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.read]);
+    });
+
+    it("update → CORE_ENTITY_PERMISSIONS.update", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.update))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.update]);
+    });
+  });
+
+  describe("PropertiesController", () => {
+    it("create → CORE_ENTITY_PERMISSIONS.create", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PropertiesController.prototype.create))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.create]);
+    });
+
+    it("list → CORE_ENTITY_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PropertiesController.prototype.list))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
+    });
+
+    it("getById → CORE_ENTITY_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PropertiesController.prototype.getById))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.read]);
+    });
+
+    it("update → CORE_ENTITY_PERMISSIONS.update", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PropertiesController.prototype.update))
+        .toEqual([...CORE_ENTITY_PERMISSIONS.update]);
+    });
+  });
+
+  describe("PaymentsController", () => {
+    it("create → PAYMENTS_PERMISSIONS.create", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PaymentsController.prototype.create))
+        .toEqual([...PAYMENTS_PERMISSIONS.create]);
+    });
+
+    it("list → PAYMENTS_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PaymentsController.prototype.list))
+        .toEqual([...PAYMENTS_PERMISSIONS.list]);
+    });
+
+    it("getBalance → PAYMENTS_PERMISSIONS.balance", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PaymentsController.prototype.getBalance))
+        .toEqual([...PAYMENTS_PERMISSIONS.balance]);
+    });
+
+    it("getById → PAYMENTS_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, PaymentsController.prototype.getById))
+        .toEqual([...PAYMENTS_PERMISSIONS.read]);
+    });
+  });
+
+  describe("CashMovementsController", () => {
+    it("list → CASH_MOVEMENTS_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, CashMovementsController.prototype.list))
+        .toEqual([...CASH_MOVEMENTS_PERMISSIONS.list]);
+    });
+  });
+
+  describe("ReportsController", () => {
+    it("getRenterHistory → REPORTS_PERMISSIONS.renterHistory", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getRenterHistory))
+        .toEqual([...REPORTS_PERMISSIONS.renterHistory]);
+    });
+
+    it("getUpcomingDuePayments → REPORTS_PERMISSIONS.upcomingDuePayments", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getUpcomingDuePayments))
+        .toEqual([...REPORTS_PERMISSIONS.upcomingDuePayments]);
+    });
+
+    it("getCashFlow → REPORTS_PERMISSIONS.cashFlow", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getCashFlow))
+        .toEqual([...REPORTS_PERMISSIONS.cashFlow]);
+    });
+
+    it("getOutstandingBalances → REPORTS_PERMISSIONS.outstandingBalances", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getOutstandingBalances))
+        .toEqual([...REPORTS_PERMISSIONS.outstandingBalances]);
+    });
+  });
+
+  describe("TenantsController", () => {
+    it("create → TENANTS_PERMISSIONS.create", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, TenantsController.prototype.create))
+        .toEqual([...TENANTS_PERMISSIONS.create]);
+    });
+
+    it("list → TENANTS_PERMISSIONS.list", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, TenantsController.prototype.list))
+        .toEqual([...TENANTS_PERMISSIONS.list]);
+    });
+
+    it("getById → TENANTS_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, TenantsController.prototype.getById))
+        .toEqual([...TENANTS_PERMISSIONS.read]);
+    });
+  });
+});

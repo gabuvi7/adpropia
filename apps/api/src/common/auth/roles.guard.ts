@@ -5,15 +5,22 @@ import {
   Injectable,
   Logger
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import type { TenantRole } from "@adpropia/shared";
 import { RequestContextService } from "../request-context/request-context.service";
 import { hasMinimumRole } from "./permissions";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
 
+export const AUTH_ROLE_ENFORCEMENT_KEY = "AUTH_ROLE_ENFORCEMENT";
+
+function isRoleEnforcementEnabled(value?: string): boolean {
+  return value !== "false";
+}
+
 type RoleCheckLog = {
   event: "role_check";
-  enforcement: false;
+  enforcement: boolean;
   endpoint: string;
   path: string | undefined;
   method: string | undefined;
@@ -24,33 +31,14 @@ type RoleCheckLog = {
   requestId: string | undefined;
 };
 
-/**
- * Placeholder pasivo del enforcement de roles (REQ-013).
- *
- * Comportamiento actual (`enforcement = false`):
- *  - Lee la metadata `@RequiresRole(...)` del handler/controller.
- *  - Si no hay metadata, deja pasar sin loguear.
- *  - Si hay metadata, lee el rol activo desde `RequestContextService`.
- *      - Si el rol cumple, loguea INFO con el resultado.
- *      - Si el rol NO cumple (o no hay contexto), loguea WARN y deja pasar igual.
- *
- * Cuando US-007 active el switch (`enforcement = true`), los requests con rol
- * insuficiente se rechazarán con `ForbiddenException` con mensaje:
- *   "No tenés permisos para realizar esta acción."
- */
 @Injectable()
 export class RolesGuard implements CanActivate {
-  /**
-   * Switch de enforcement. En esta iteración SIEMPRE es `false` (placeholder).
-   * Cambiar a `true` queda fuera del alcance hasta US-007.
-   */
-  private readonly enforcement: boolean = false;
-
   private readonly logger = new Logger(RolesGuard.name);
 
   constructor(
     private readonly reflector: Reflector,
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    private readonly configService: ConfigService
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -59,9 +47,9 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()]
     );
 
-    if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
-    }
+    const enforcementEnabled = isRoleEnforcementEnabled(
+      this.configService.get<string>(AUTH_ROLE_ENFORCEMENT_KEY)
+    );
 
     const requestContext = this.contextService.getOptional();
     const actualRole = requestContext?.role;
@@ -74,13 +62,34 @@ export class RolesGuard implements CanActivate {
       }
     })();
 
+    if (!requiredRoles || requiredRoles.length === 0) {
+      if (enforcementEnabled) {
+        throw new ForbiddenException("No tenés permisos para realizar esta acción.");
+      }
+
+      const logPayload: RoleCheckLog = {
+        event: "role_check",
+        enforcement: false,
+        endpoint: context.getHandler().name,
+        path: httpRequest?.url,
+        method: httpRequest?.method,
+        expectedRoles: [],
+        actualRole,
+        tenantId: requestContext?.tenantId,
+        userId: requestContext?.userId,
+        requestId: requestContext?.requestId
+      };
+      this.logger.warn(logPayload);
+      return true;
+    }
+
     const allowed =
       actualRole !== undefined &&
       requiredRoles.some((required) => hasMinimumRole(actualRole, required));
 
     const logPayload: RoleCheckLog = {
       event: "role_check",
-      enforcement: false,
+      enforcement: enforcementEnabled,
       endpoint: context.getHandler().name,
       path: httpRequest?.url,
       method: httpRequest?.method,
@@ -93,7 +102,7 @@ export class RolesGuard implements CanActivate {
 
     if (!allowed) {
       this.logger.warn(logPayload);
-      if (this.enforcement) {
+      if (enforcementEnabled) {
         throw new ForbiddenException("No tenés permisos para realizar esta acción.");
       }
       return true;

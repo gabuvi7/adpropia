@@ -1,9 +1,11 @@
 import { type MiddlewareConsumer, Module, type NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
 import { RequestContextModule } from "./common/request-context/request-context.module";
 import { TemporaryHeaderRequestContextMiddleware } from "./common/request-context/request-context.middleware";
 import { Auth0Module } from "./common/auth0/auth0.module";
 import { Auth0JwtMiddleware } from "./common/auth0/auth0-jwt.middleware";
+import { RolesGuard } from "./common/auth/roles.guard";
 import { AuditModule } from "./modules/audit/audit.module";
 import { ContractsModule } from "./modules/contracts/contracts.module";
 import { LiquidationsModule } from "./modules/liquidations/liquidations.module";
@@ -27,6 +29,7 @@ export const appModules = [
 ] as const;
 
 const protectedRoutes = [
+  "tenants",
   "owners",
   "renters",
   "properties",
@@ -46,6 +49,12 @@ const protectedRoutes = [
     RequestContextModule,
     Auth0Module,
     ...appModules
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard
+    }
   ]
 })
 export class AppModule implements NestModule {
