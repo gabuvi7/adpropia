@@ -36,7 +36,7 @@ describe("LiquidationStateMachine", () => {
       "permite %s -> %s sin reason",
       ({ from, to }) => {
         const sm = new LiquidationStateMachine();
-        const result = sm.validate({ from, to });
+        const result = sm.validate({ from, to, reason: undefined });
         expect(result).toEqual({ ok: true });
       }
     );
@@ -62,7 +62,7 @@ describe("LiquidationStateMachine", () => {
       "rechaza %s -> %s con INVALID_TRANSITION",
       ({ from, to }) => {
         const sm = new LiquidationStateMachine();
-        const result = sm.validate({ from, to });
+        const result = sm.validate({ from, to, reason: undefined });
         expect(result).toEqual({
           ok: false,
           code: "INVALID_TRANSITION",
@@ -85,7 +85,7 @@ describe("LiquidationStateMachine", () => {
   describe("validate — VOID requires reason", () => {
     it("rechaza DRAFT -> VOIDED sin reason con VOID_REASON_REQUIRED", () => {
       const sm = new LiquidationStateMachine();
-      const result = sm.validate({ from: "DRAFT", to: "VOIDED" });
+      const result = sm.validate({ from: "DRAFT", to: "VOIDED", reason: undefined });
       expect(result).toEqual({
         ok: false,
         code: "VOID_REASON_REQUIRED",
@@ -124,7 +124,7 @@ describe("LiquidationStateMachine", () => {
 
     it("rechaza PAID -> VOIDED sin reason también con PAID_VOID_NOT_ALLOWED (no con VOID_REASON_REQUIRED)", () => {
       const sm = new LiquidationStateMachine();
-      const result = sm.validate({ from: "PAID", to: "VOIDED" });
+      const result = sm.validate({ from: "PAID", to: "VOIDED", reason: undefined });
       expect(result).toEqual({
         ok: false,
         code: "PAID_VOID_NOT_ALLOWED",

@@ -239,8 +239,8 @@ describe("LiquidationsService — previewLiquidation", () => {
     expect(result.totals.adjustmentsTotal).toBe("0.00");
     expect(result.totals.currency).toBe("ARS");
     expect(result.lineItems).toHaveLength(1);
-    expect(result.lineItems[0].paymentId).toBe("pay-1");
-    expect(result.lineItems[0].propertyAddress).toBe("Address prop-1");
+    expect(result.lineItems[0]!.paymentId).toBe("pay-1");
+    expect(result.lineItems[0]!.propertyAddress).toBe("Address prop-1");
 
     expect(prisma.liquidation.create).not.toHaveBeenCalled();
   });
@@ -277,8 +277,8 @@ describe("LiquidationsService — previewLiquidation", () => {
 
     const result = await service.previewLiquidation(previewInput);
 
-    expect(result.lineItems[0].commissionBpsApplied).toBe(500);
-    expect(result.lineItems[0].commissionAmount).toBe("5000.00");
+    expect(result.lineItems[0]!.commissionBpsApplied).toBe(500);
+    expect(result.lineItems[0]!.commissionAmount).toBe("5000.00");
   });
 
   it("scopea owner.findFirst por tenant del contexto", async () => {
@@ -721,7 +721,7 @@ describe("LiquidationsService — listLiquidations", () => {
 
     await service.listLiquidations({});
 
-    const call = vi.mocked(prisma.liquidation.findMany).mock.calls[0][0];
+    const call = vi.mocked(prisma.liquidation.findMany).mock.calls[0]![0];
     expect(call?.orderBy).toEqual([{ periodEnd: "desc" }, { createdAt: "desc" }]);
   });
 

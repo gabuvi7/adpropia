@@ -353,7 +353,7 @@ function pickDominantCurrency(contracts: RentalContract[]): Currency {
     return "ARS";
   }
   const active = contracts.find((contract) => contract.status === "ACTIVE");
-  return (active ?? contracts[0]).currency;
+  return (active ?? contracts[0]!).currency;
 }
 
 function aggregatePaymentTotals(

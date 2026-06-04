@@ -66,7 +66,7 @@ describe("LiquidationCalculator", () => {
       );
 
       expect(result.lineItems).toHaveLength(1);
-      expect(result.lineItems[0].liquidableAmount).toBe("100000.00");
+      expect(result.lineItems[0]!.liquidableAmount).toBe("100000.00");
       expect(result.totals.grossAmount).toBe("100000.00");
     });
 
@@ -84,7 +84,7 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].liquidableAmount).toBe("40000.00");
+      expect(result.lineItems[0]!.liquidableAmount).toBe("40000.00");
       expect(result.totals.grossAmount).toBe("40000.00");
     });
 
@@ -102,7 +102,7 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].liquidableAmount).toBe("100000.00");
+      expect(result.lineItems[0]!.liquidableAmount).toBe("100000.00");
       expect(result.totals.grossAmount).toBe("100000.00");
     });
 
@@ -193,8 +193,8 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].commissionBpsApplied).toBe(700);
-      expect(result.lineItems[0].commissionAmount).toBe("7000.00");
+      expect(result.lineItems[0]!.commissionBpsApplied).toBe(700);
+      expect(result.lineItems[0]!.commissionAmount).toBe("7000.00");
     });
 
     it("property sin commissionBps (null) cae al defaultCommissionBps", () => {
@@ -207,8 +207,8 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].commissionBpsApplied).toBe(500);
-      expect(result.lineItems[0].commissionAmount).toBe("5000.00");
+      expect(result.lineItems[0]!.commissionBpsApplied).toBe(500);
+      expect(result.lineItems[0]!.commissionAmount).toBe("5000.00");
     });
 
     it("property no presente en propertyCommissions cae al defaultCommissionBps", () => {
@@ -221,8 +221,8 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].commissionBpsApplied).toBe(500);
-      expect(result.lineItems[0].commissionAmount).toBe("5000.00");
+      expect(result.lineItems[0]!.commissionBpsApplied).toBe(500);
+      expect(result.lineItems[0]!.commissionAmount).toBe("5000.00");
     });
 
     it("ambos bps en 0 produce commissionBpsApplied=0 (snapshot exacto) y commissionAmount=0.00", () => {
@@ -235,9 +235,9 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].commissionBpsApplied).toBe(0);
-      expect(result.lineItems[0].commissionAmount).toBe("0.00");
-      expect(result.lineItems[0].netAmount).toBe("100000.00");
+      expect(result.lineItems[0]!.commissionBpsApplied).toBe(0);
+      expect(result.lineItems[0]!.commissionAmount).toBe("0.00");
+      expect(result.lineItems[0]!.netAmount).toBe("100000.00");
     });
 
     it("bps=1500 (15%) sobre paidAmount=100000.00 → commissionAmount=15000.00", () => {
@@ -250,8 +250,8 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].commissionAmount).toBe("15000.00");
-      expect(result.lineItems[0].netAmount).toBe("85000.00");
+      expect(result.lineItems[0]!.commissionAmount).toBe("15000.00");
+      expect(result.lineItems[0]!.netAmount).toBe("85000.00");
     });
 
     it("bps=333 (3.33%) sobre paidAmount=100000.00 → commissionAmount=3330.00", () => {
@@ -264,7 +264,7 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].commissionAmount).toBe("3330.00");
+      expect(result.lineItems[0]!.commissionAmount).toBe("3330.00");
     });
 
     it("trunca hacia abajo: bps=1, paidAmount=0.10 → commissionAmount=0.00 (10 cents * 1 / 10000 = 0)", () => {
@@ -283,10 +283,10 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].liquidableAmount).toBe("0.10");
-      expect(result.lineItems[0].commissionBpsApplied).toBe(1);
-      expect(result.lineItems[0].commissionAmount).toBe("0.00");
-      expect(result.lineItems[0].netAmount).toBe("0.10");
+      expect(result.lineItems[0]!.liquidableAmount).toBe("0.10");
+      expect(result.lineItems[0]!.commissionBpsApplied).toBe(1);
+      expect(result.lineItems[0]!.commissionAmount).toBe("0.00");
+      expect(result.lineItems[0]!.netAmount).toBe("0.10");
     });
 
     it("commission se calcula sobre liquidableAmount y no sobre paidAmount cuando hay OVERPAID", () => {
@@ -306,8 +306,8 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].liquidableAmount).toBe("100000.00");
-      expect(result.lineItems[0].commissionAmount).toBe("10000.00");
+      expect(result.lineItems[0]!.liquidableAmount).toBe("100000.00");
+      expect(result.lineItems[0]!.commissionAmount).toBe("10000.00");
     });
   });
 
@@ -428,8 +428,8 @@ describe("LiquidationCalculator", () => {
       // Mutamos el input *después* del cálculo. El resultado ya emitido no debe cambiar.
       propertyCommissions[0] = { propertyId: "prop-1", commissionBps: 9999 };
 
-      expect(result.lineItems[0].commissionBpsApplied).toBe(700);
-      expect(result.lineItems[0].commissionAmount).toBe("7000.00");
+      expect(result.lineItems[0]!.commissionBpsApplied).toBe(700);
+      expect(result.lineItems[0]!.commissionAmount).toBe("7000.00");
     });
   });
 
@@ -460,8 +460,8 @@ describe("LiquidationCalculator", () => {
       );
 
       expect(result.lineItems).toHaveLength(1);
-      expect(result.lineItems[0].paymentId).toBe("ars-1");
-      expect(result.lineItems[0].currency).toBe("ARS");
+      expect(result.lineItems[0]!.paymentId).toBe("ars-1");
+      expect(result.lineItems[0]!.currency).toBe("ARS");
       expect(result.totals.currency).toBe("ARS");
     });
 
@@ -475,7 +475,7 @@ describe("LiquidationCalculator", () => {
         })
       );
 
-      expect(result.lineItems[0].currency).toBe("USD");
+      expect(result.lineItems[0]!.currency).toBe("USD");
       expect(result.totals.currency).toBe("USD");
     });
   });

@@ -95,6 +95,7 @@ function textContains(doc: MockDoc, needle: string): boolean {
 function buildTenant(overrides: Partial<PdfTenantHeader> = {}): PdfTenantHeader {
   return {
     commercialName: "Inmobiliaria Modelo",
+    legalIdentity: undefined,
     ...overrides
   };
 }
@@ -137,6 +138,8 @@ function buildInput(overrides: Partial<RenderLiquidationInput> = {}): RenderLiqu
       adjustmentsTotal: "0.00",
       netAmount: "90000.00"
     },
+    notes: undefined,
+    issuedAt: undefined,
     ...overrides
   };
 }

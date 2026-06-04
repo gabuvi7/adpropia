@@ -15,13 +15,13 @@ type RoleCheckLog = {
   event: "role_check";
   enforcement: false;
   endpoint: string;
-  path?: string;
-  method?: string;
+  path: string | undefined;
+  method: string | undefined;
   expectedRoles: TenantRole[];
   actualRole: TenantRole | undefined;
-  tenantId?: string;
-  userId?: string;
-  requestId?: string;
+  tenantId: string | undefined;
+  userId: string | undefined;
+  requestId: string | undefined;
 };
 
 /**

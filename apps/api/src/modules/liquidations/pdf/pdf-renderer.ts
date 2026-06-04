@@ -16,7 +16,7 @@ export type LegalIdentity = {
 export type PdfTenantHeader = {
   commercialName: string;
   logoUrl?: string; // MVP: no carga; ver TODO en renderHeader
-  legalIdentity?: LegalIdentity;
+  legalIdentity: LegalIdentity | undefined;
 };
 
 export type PdfOwnerInfo = {
@@ -61,8 +61,8 @@ export type RenderLiquidationInput = {
   lineItems: PdfLineItem[];
   adjustments: PdfAdjustment[];
   totals: PdfTotals;
-  notes?: string;
-  issuedAt?: Date;
+  notes: string | undefined;
+  issuedAt: Date | undefined;
 };
 
 export interface PdfRenderer {

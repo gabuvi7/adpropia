@@ -3,7 +3,7 @@ import type { LiquidationStatus } from "@adpropia/database";
 export type StateTransition = {
   from: LiquidationStatus;
   to: LiquidationStatus;
-  reason?: string;
+  reason: string | undefined;
 };
 
 export type StateValidationResult =

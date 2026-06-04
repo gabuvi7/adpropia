@@ -432,7 +432,7 @@ describe("ReportsService.getOutstandingBalances", () => {
 
     const result = await service.getOutstandingBalances({ asOf: "2026-04-01T00:00:00.000Z" });
 
-    expect(result.items[0].pendingDebt).toBe("10000.00");
+    expect(result.items[0]!.pendingDebt).toBe("10000.00");
   });
 
   it("computes nextDueAt as the earliest open payment with dueAt >= asOf", async () => {
@@ -457,8 +457,8 @@ describe("ReportsService.getOutstandingBalances", () => {
 
     const result = await service.getOutstandingBalances({ asOf: "2026-04-20T00:00:00.000Z" });
 
-    expect(result.items[0].overduePaymentsCount).toBe(1);
-    expect(result.items[0].nextDueAt).toEqual(new Date("2026-05-01T00:00:00.000Z"));
+    expect(result.items[0]!.overduePaymentsCount).toBe(1);
+    expect(result.items[0]!.nextDueAt).toEqual(new Date("2026-05-01T00:00:00.000Z"));
   });
 
   it("excludes contracts whose remaining debt is zero", async () => {

@@ -113,7 +113,7 @@ describe("LiquidationsController", () => {
       await controller.create({ ...validCreateBody(), manualAdjustments: [] });
 
       expect(service.createLiquidation).toHaveBeenCalledTimes(1);
-      const arg = service.createLiquidation.mock.calls[0][0];
+      const arg = service.createLiquidation.mock.calls[0]![0];
       expect(Array.isArray(arg.manualAdjustments)).toBe(true);
       expect(arg.manualAdjustments).toHaveLength(0);
     });
