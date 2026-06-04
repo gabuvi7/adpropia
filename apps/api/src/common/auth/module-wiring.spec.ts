@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { AppModule } from "../../app.module";
 import { LiquidationsModule } from "../../modules/liquidations/liquidations.module";
 import {
+  ADMIN_PROVISIONING_PERMISSIONS,
   CORE_ENTITY_PERMISSIONS,
   PAYMENTS_PERMISSIONS,
   CASH_MOVEMENTS_PERMISSIONS,
@@ -10,6 +11,7 @@ import {
   TENANTS_PERMISSIONS
 } from "./permissions";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
+import { AdminProvisioningController } from "../../modules/admin/admin-provisioning.controller";
 import { ContractsController } from "../../modules/contracts/contracts.controller";
 import { OwnersController } from "../../modules/owners/owners.controller";
 import { RentersController } from "../../modules/renters/renters.controller";
@@ -209,6 +211,23 @@ describe("@RequiresRole metadata inventory", () => {
     it("getById → TENANTS_PERMISSIONS.read", () => {
       expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, TenantsController.prototype.getById))
         .toEqual([...TENANTS_PERMISSIONS.read]);
+    });
+  });
+
+  describe("AdminProvisioningController", () => {
+    it("linkTenantAuth0Org → ADMIN_PROVISIONING_PERMISSIONS.manage", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, AdminProvisioningController.prototype.linkTenantAuth0Org))
+        .toEqual([...ADMIN_PROVISIONING_PERMISSIONS.manage]);
+    });
+
+    it("linkUserAuth0Subject → ADMIN_PROVISIONING_PERMISSIONS.manage", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, AdminProvisioningController.prototype.linkUserAuth0Subject))
+        .toEqual([...ADMIN_PROVISIONING_PERMISSIONS.manage]);
+    });
+
+    it("provisionMembership → ADMIN_PROVISIONING_PERMISSIONS.manage", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, AdminProvisioningController.prototype.provisionMembership))
+        .toEqual([...ADMIN_PROVISIONING_PERMISSIONS.manage]);
     });
   });
 });

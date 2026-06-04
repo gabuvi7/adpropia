@@ -6,6 +6,7 @@ import { TemporaryHeaderRequestContextMiddleware } from "./common/request-contex
 import { Auth0Module } from "./common/auth0/auth0.module";
 import { Auth0JwtMiddleware } from "./common/auth0/auth0-jwt.middleware";
 import { RolesGuard } from "./common/auth/roles.guard";
+import { AdminModule } from "./modules/admin/admin.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { ContractsModule } from "./modules/contracts/contracts.module";
 import { LiquidationsModule } from "./modules/liquidations/liquidations.module";
@@ -17,6 +18,7 @@ import { ReportsModule } from "./modules/reports/reports.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 
 export const appModules = [
+  AdminModule,
   TenantsModule,
   OwnersModule,
   RentersModule,
@@ -29,6 +31,7 @@ export const appModules = [
 ] as const;
 
 const protectedRoutes = [
+  "admin",
   "tenants",
   "owners",
   "renters",
