@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
 import type { DocumentStorage } from "../../common/storage/document-storage.interface";
+import type { AuditService } from "../audit/audit.service";
 import { LiquidationCalculator } from "./calculation/liquidation-calculator";
 import { LiquidationStateMachine } from "./state-machine/liquidation-state-machine";
 import { PdfKitLiquidationRenderer } from "./pdf/pdf-renderer";
@@ -64,6 +65,13 @@ function createRendererMock(): PdfKitLiquidationRenderer & { render: ReturnType<
   return renderer;
 }
 
+function createAuditMock(): AuditService {
+  return {
+    createEntry: vi.fn().mockResolvedValue({}),
+    createEntryWithClient: vi.fn().mockResolvedValue({})
+  } as unknown as AuditService;
+}
+
 type Ctx = { tenantId: string; userId: string | null; role: string; requestId: string };
 
 function createContextMock(overrides: Partial<Ctx> = {}): RequestContextService {
@@ -83,17 +91,20 @@ function buildService(
   options: {
     renderer?: PdfKitLiquidationRenderer;
     storage?: DocumentStorage;
+    audit?: AuditService;
   } = {}
 ): LiquidationsService {
   const renderer = options.renderer ?? createRendererMock();
   const storage = options.storage ?? createStorageMock();
+  const audit = options.audit ?? createAuditMock();
   return new LiquidationsService(
     prisma,
     context,
     new LiquidationCalculator(),
     new LiquidationStateMachine(),
     renderer,
-    storage
+    storage,
+    audit
   );
 }
 
@@ -923,6 +934,7 @@ describe("LiquidationsService — changeStatus (DRAFT → ISSUED)", () => {
 
   it("genera PDF, lo guarda en storage, crea Document y actualiza status + issuedAt (count=1, ganador)", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     const liquidation = makeLiquidation({ status: "DRAFT" });
     vi.mocked(prisma.liquidation.findUnique).mockResolvedValue(liquidation as never);
     mockTenantContext(prisma);
@@ -937,7 +949,7 @@ describe("LiquidationsService — changeStatus (DRAFT → ISSUED)", () => {
 
     const renderer = createRendererMock();
     const storage = createStorageMock();
-    const service = buildService(prisma, createContextMock(), { renderer, storage });
+    const service = buildService(prisma, createContextMock(), { renderer, storage, audit });
 
     await service.changeStatus("liq-1", { status: "ISSUED" });
 
@@ -970,6 +982,11 @@ describe("LiquidationsService — changeStatus (DRAFT → ISSUED)", () => {
 
     // El archivo NO se borra en happy path.
     expect(storage.delete).not.toHaveBeenCalled();
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-a" }),
+      expect.objectContaining({ action: "liquidation.status.changed", metadata: { from: "DRAFT", to: "ISSUED" } })
+    );
   });
 
   it("DRAFT → ISSUED con count=0 y status post-reload ISSUED + Document existente: idempotente, archivo NO se borra", async () => {
@@ -1092,6 +1109,7 @@ describe("LiquidationsService — changeStatus (ISSUED → PAID)", () => {
 
   it("ejecuta updateMany condicional con status=ISSUED y crea CashMovement OWNER_PAYOUT una sola vez (count=1)", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     const liquidation = makeLiquidation({
       status: "ISSUED",
       issuedAt: new Date("2026-04-30T12:00:00.000Z"),
@@ -1107,7 +1125,7 @@ describe("LiquidationsService — changeStatus (ISSUED → PAID)", () => {
     });
     tx.cashMovement.create.mockResolvedValue({ id: "cm-1" });
 
-    const service = buildService(prisma, createContextMock());
+    const service = buildService(prisma, createContextMock(), { audit });
 
     await service.changeStatus("liq-1", { status: "PAID" });
 
@@ -1133,6 +1151,11 @@ describe("LiquidationsService — changeStatus (ISSUED → PAID)", () => {
         reason: expect.stringContaining("liq-1")
       })
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-a" }),
+      expect.objectContaining({ action: "liquidation.status.changed", metadata: { from: "ISSUED", to: "PAID" } })
+    );
   });
 
   it("ISSUED → PAID con count=0 y status post-reload PAID: idempotente, NO crea CashMovement", async () => {
@@ -1280,6 +1303,16 @@ describe("LiquidationsService — changeStatus (transiciones inválidas)", () =>
   });
 });
 
+function mockVoidTransaction(prisma: PrismaService) {
+  const tx = {
+    liquidation: { update: vi.fn() }
+  };
+  vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+    async (callback: (tx: unknown) => unknown) => callback(tx)
+  );
+  return tx;
+}
+
 describe("LiquidationsService — changeStatus (VOID)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1287,19 +1320,21 @@ describe("LiquidationsService — changeStatus (VOID)", () => {
 
   it("DRAFT → VOIDED con voidReason actualiza status + voidedAt + voidReason", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     vi.mocked(prisma.liquidation.findUnique).mockResolvedValue(
       makeLiquidation({ status: "DRAFT" }) as never
     );
-    vi.mocked(prisma.liquidation.update).mockResolvedValue({
+    const tx = mockVoidTransaction(prisma);
+    tx.liquidation.update.mockResolvedValue({
       ...makeLiquidation({ status: "VOIDED" }),
       voidedAt: new Date(),
       voidReason: "Error de carga"
     } as never);
-    const service = buildService(prisma, createContextMock());
+    const service = buildService(prisma, createContextMock(), { audit });
 
     await service.changeStatus("liq-1", { status: "VOIDED", voidReason: "Error de carga" });
 
-    expect(prisma.liquidation.update).toHaveBeenCalledWith({
+    expect(tx.liquidation.update).toHaveBeenCalledWith({
       where: { id_tenantId: { id: "liq-1", tenantId: "tenant-a" } },
       data: expect.objectContaining({
         status: "VOIDED",
@@ -1308,21 +1343,29 @@ describe("LiquidationsService — changeStatus (VOID)", () => {
       }),
       include: { lineItems: true, manualAdjustments: true }
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-a" }),
+      expect.objectContaining({ action: "liquidation.status.changed", metadata: { from: "DRAFT", to: "VOIDED" } })
+    );
   });
 
   it("ISSUED → VOIDED con voidReason actualiza", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     vi.mocked(prisma.liquidation.findUnique).mockResolvedValue(
       makeLiquidation({ status: "ISSUED" }) as never
     );
-    vi.mocked(prisma.liquidation.update).mockResolvedValue(
+    const tx = mockVoidTransaction(prisma);
+    tx.liquidation.update.mockResolvedValue(
       makeLiquidation({ status: "VOIDED", voidReason: "x" }) as never
     );
-    const service = buildService(prisma, createContextMock());
+    const service = buildService(prisma, createContextMock(), { audit });
 
     await service.changeStatus("liq-1", { status: "VOIDED", voidReason: "Anulación pedida por owner" });
 
-    expect(prisma.liquidation.update).toHaveBeenCalled();
+    expect(tx.liquidation.update).toHaveBeenCalled();
+    expect(audit.createEntryWithClient).toHaveBeenCalled();
   });
 
   it("DRAFT → VOIDED SIN voidReason rechaza", async () => {
@@ -1408,6 +1451,7 @@ describe("LiquidationsService — addManualAdjustment", () => {
 
   it("DRAFT + CREDIT: crea adjustment, recalcula net (gross - commission + credit)", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     // gross 100000, commission 10000, sin adjustments previos => net base 90000.
     // sumamos CREDIT 5000 => net 95000.
     const liquidation = makeLiquidation({
@@ -1427,7 +1471,7 @@ describe("LiquidationsService — addManualAdjustment", () => {
     const tx = mockAdjustmentTransaction(prisma);
     tx.liquidationManualAdjustment.create.mockResolvedValue({ id: "adj-1" });
 
-    const service = buildService(prisma, createContextMock());
+    const service = buildService(prisma, createContextMock(), { audit });
 
     await service.addManualAdjustment("liq-1", {
       concept: "Bonificación",
@@ -1449,6 +1493,11 @@ describe("LiquidationsService — addManualAdjustment", () => {
       where: { id_tenantId: { id: "liq-1", tenantId: "tenant-a" } },
       data: { netAmount: "95000.00" }
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-a" }),
+      expect.objectContaining({ action: "liquidation.adjustment.added", metadata: { concept: "Bonificación", amount: "5000.00", sign: "CREDIT" } })
+    );
   });
 
   it("DRAFT + DEBIT: net se calcula como gross - commission - debit", async () => {
@@ -1579,6 +1628,7 @@ describe("LiquidationsService — removeManualAdjustment", () => {
 
   it("DRAFT: borra el adjustment y recalcula net excluyendo el removido", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     const liquidation = makeLiquidation({
       grossAmount: "100000.00",
       commissionAmount: "10000.00",
@@ -1591,7 +1641,7 @@ describe("LiquidationsService — removeManualAdjustment", () => {
     const tx = mockAdjustmentTransaction(prisma);
     tx.liquidationManualAdjustment.delete.mockResolvedValue({ id: "adj-1" });
 
-    const service = buildService(prisma, createContextMock());
+    const service = buildService(prisma, createContextMock(), { audit });
 
     await service.removeManualAdjustment("liq-1", "adj-1");
 
@@ -1603,6 +1653,11 @@ describe("LiquidationsService — removeManualAdjustment", () => {
       where: { id_tenantId: { id: "liq-1", tenantId: "tenant-a" } },
       data: { netAmount: "90000.00" }
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-a" }),
+      expect.objectContaining({ action: "liquidation.adjustment.removed", metadata: { adjustmentId: "adj-1" } })
+    );
   });
 
   it("404 si el adjustment no existe en la liquidación", async () => {

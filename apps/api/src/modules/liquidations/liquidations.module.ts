@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../../common/prisma";
 import { RequestContextModule } from "../../common/request-context/request-context.module";
+import { AuditModule } from "../audit/audit.module";
 import { DOCUMENT_STORAGE } from "../../common/storage/document-storage.interface";
 import { createDocumentStorageFromEnv } from "../../common/storage/document-storage.factory";
 import { LiquidationCalculator } from "./calculation/liquidation-calculator";
@@ -12,7 +13,7 @@ import { LiquidationsService } from "./liquidations.service";
 import { ManualAdjustmentsController } from "./manual-adjustments.controller";
 
 @Module({
-  imports: [PrismaModule, RequestContextModule],
+  imports: [PrismaModule, RequestContextModule, AuditModule],
   controllers: [LiquidationsController, ManualAdjustmentsController],
   providers: [
     LiquidationsService,

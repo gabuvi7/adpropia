@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
+import type { AuditService } from "../audit/audit.service";
 import { PaymentsService } from "./payments.service";
 
 type TxClient = {
@@ -39,6 +40,13 @@ function createContextMock(tenantId = "tenant-a") {
   } as RequestContextService;
 }
 
+function createAuditMock(): AuditService {
+  return {
+    createEntry: vi.fn().mockResolvedValue({}),
+    createEntryWithClient: vi.fn().mockResolvedValue({ audit: true })
+  } as unknown as AuditService;
+}
+
 const baseContract = {
   id: "contract-1",
   tenantId: "tenant-a",
@@ -65,7 +73,7 @@ describe("PaymentsService.createPayment", () => {
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
     prisma.__tx.payment.create.mockResolvedValue({ id: "payment-1", tenantId: "tenant-a" });
     prisma.__tx.cashMovement.create.mockResolvedValue({ id: "movement-1", tenantId: "tenant-a" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await service.createPayment(createInput);
 
@@ -100,7 +108,7 @@ describe("PaymentsService.createPayment", () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
     prisma.__tx.payment.create.mockResolvedValue({ id: "payment-2", tenantId: "tenant-a" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await service.createPayment({ ...createInput, paidAmount: "0", paidAt: undefined });
 
@@ -113,7 +121,7 @@ describe("PaymentsService.createPayment", () => {
   it("rejects when the contract does not exist for the active tenant", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(null);
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -122,7 +130,7 @@ describe("PaymentsService.createPayment", () => {
   it("rejects when the contract is CANCELLED", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, status: "CANCELLED" } as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -130,7 +138,7 @@ describe("PaymentsService.createPayment", () => {
   it("rejects when the renterId does not match the contract renter", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, renterId: "other-renter" } as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -138,7 +146,7 @@ describe("PaymentsService.createPayment", () => {
   it("rejects when the currency does not match the contract currency", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, currency: "USD" } as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -147,7 +155,7 @@ describe("PaymentsService.createPayment", () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
     prisma.__tx.payment.create.mockResolvedValue({ id: "payment-3", tenantId: "tenant-a" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await service.createPayment({ ...createInput, dueAmount: "100000.00", paidAmount: "60000.50" });
 
@@ -160,7 +168,7 @@ describe("PaymentsService.createPayment", () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
     prisma.__tx.payment.create.mockResolvedValue({ id: "payment-4", tenantId: "tenant-a" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await service.createPayment({ ...createInput, dueAmount: "100000.00", paidAmount: "150000.00" });
 
@@ -174,7 +182,7 @@ describe("PaymentsService.listPayments", () => {
   it("filters by tenantId and contractId", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-b"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-b"), createAuditMock());
 
     await service.listPayments({ contractId: "contract-9" });
 
@@ -187,7 +195,7 @@ describe("PaymentsService.listPayments", () => {
   it("filters by tenantId and renterId", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-c"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-c"), createAuditMock());
 
     await service.listPayments({ renterId: "renter-9" });
 
@@ -207,7 +215,7 @@ describe("PaymentsService.getContractBalance", () => {
       { dueAmount: "100000.00", paidAmount: "100000.00", remainingDebt: "0.00", creditBalance: "0.00", status: "PAID" },
       { dueAmount: "100000.00", paidAmount: "50000.00", remainingDebt: "50000.00", creditBalance: "0.00", status: "VOIDED" }
     ] as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     const balance = await service.getContractBalance("contract-1");
 
@@ -227,7 +235,7 @@ describe("PaymentsService.getContractBalance", () => {
   it("rejects when the contract does not belong to the tenant", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(null);
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.getContractBalance("contract-x")).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -237,7 +245,7 @@ describe("PaymentsService.getPaymentById", () => {
   it("looks up payments by id_tenantId and throws NotFound when missing", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findUnique).mockResolvedValue(null);
-    const service = new PaymentsService(prisma, createContextMock("tenant-z"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-z"), createAuditMock());
 
     await expect(service.getPaymentById("payment-x")).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.payment.findUnique).toHaveBeenCalledWith({
@@ -250,7 +258,7 @@ describe("PaymentsService.listCashMovements", () => {
   it("filters cash movements by tenantId and date range", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.cashMovement.findMany).mockResolvedValue([] as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-d"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-d"), createAuditMock());
 
     await service.listCashMovements({ from: "2026-04-01T00:00:00.000Z", to: "2026-04-30T00:00:00.000Z" });
 
@@ -265,7 +273,7 @@ describe("PaymentsService.listCashMovements", () => {
 
   it("rejects when from is greater than to", async () => {
     const prisma = createPrismaMock();
-    const service = new PaymentsService(prisma, createContextMock("tenant-d"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-d"), createAuditMock());
 
     await expect(
       service.listCashMovements({ from: "2026-05-30T00:00:00.000Z", to: "2026-05-01T00:00:00.000Z" })
@@ -275,7 +283,7 @@ describe("PaymentsService.listCashMovements", () => {
   it("returns all tenant movements when no range is provided", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.cashMovement.findMany).mockResolvedValue([] as never);
-    const service = new PaymentsService(prisma, createContextMock("tenant-e"));
+    const service = new PaymentsService(prisma, createContextMock("tenant-e"), createAuditMock());
 
     await service.listCashMovements({});
 

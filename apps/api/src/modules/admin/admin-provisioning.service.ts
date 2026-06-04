@@ -2,6 +2,8 @@ import { ConflictException, Injectable, NotFoundException } from "@nestjs/common
 import type { TenantRole } from "@adpropia/shared";
 import type { Prisma } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
+import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 
 export type LinkTenantAuth0OrgResult = {
   tenant: {
@@ -36,16 +38,32 @@ export type ProvisionMembershipResult = {
 
 @Injectable()
 export class AdminProvisioningService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly contextService: RequestContextService
+  ) {}
 
-  async linkTenantAuth0Org(tenantId: string, auth0OrgId: string): Promise<LinkTenantAuth0OrgResult> {
+  async linkTenantAuth0Org(targetTenantId: string, auth0OrgId: string): Promise<LinkTenantAuth0OrgResult> {
+    const ctx = this.contextService.get();
+
     try {
-      const tenant = await this.prisma.tenant.update({
-        where: { id: tenantId },
-        data: { auth0OrgId },
-        select: { id: true, name: true, slug: true, status: true, auth0OrgId: true }
+      return await this.prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.update({
+          where: { id: targetTenantId },
+          data: { auth0OrgId },
+          select: { id: true, name: true, slug: true, status: true, auth0OrgId: true }
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          tenantId: targetTenantId,
+          entityType: "tenant",
+          entityId: targetTenantId,
+          action: "admin-provisioning.auth0-org.linked"
+        });
+
+        return { tenant };
       });
-      return { tenant };
     } catch (error) {
       if (hasPrismaCode(error, "P2025")) {
         throw new NotFoundException("Tenant not found.");
@@ -58,13 +76,24 @@ export class AdminProvisioningService {
   }
 
   async linkUserAuth0Subject(userId: string, auth0UserId: string): Promise<LinkUserAuth0SubjectResult> {
+    const ctx = this.contextService.get();
+
     try {
-      const user = await this.prisma.user.update({
-        where: { id: userId },
-        data: { auth0UserId },
-        select: { id: true, email: true, name: true, isActive: true, auth0UserId: true }
+      return await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.update({
+          where: { id: userId },
+          data: { auth0UserId },
+          select: { id: true, email: true, name: true, isActive: true, auth0UserId: true }
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "user",
+          entityId: userId,
+          action: "admin-provisioning.auth0-subject.linked"
+        });
+
+        return { user };
       });
-      return { user };
     } catch (error) {
       if (hasPrismaCode(error, "P2025")) {
         throw new NotFoundException("User not found.");
@@ -81,6 +110,7 @@ export class AdminProvisioningService {
     userId: string;
     role: TenantRole;
   }): Promise<ProvisionMembershipResult> {
+    const ctx = this.contextService.get();
     const now = new Date();
 
     const membership = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -94,7 +124,7 @@ export class AdminProvisioningService {
         throw new NotFoundException("User not found.");
       }
 
-      return tx.tenantUser.upsert({
+      const result = await tx.tenantUser.upsert({
         where: { tenantId_userId: { tenantId: dto.tenantId, userId: dto.userId } },
         create: {
           tenantId: dto.tenantId,
@@ -110,6 +140,16 @@ export class AdminProvisioningService {
         },
         select: { id: true, tenantId: true, userId: true, role: true, isActive: true, acceptedAt: true }
       });
+
+      await this.audit.createEntryWithClient(tx, ctx, {
+        tenantId: dto.tenantId,
+        entityType: "tenant",
+        entityId: dto.tenantId,
+        action: "admin-provisioning.membership.provisioned",
+        metadata: { userId: dto.userId, role: dto.role }
+      });
+
+      return result;
     });
 
     return { membership };

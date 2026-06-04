@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
+import type { AuditService } from "../audit/audit.service";
 import { ContractsService } from "./contracts.service";
 
 function createPrismaMock() {
@@ -20,7 +21,8 @@ function createPrismaMock() {
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn()
-    }
+    },
+    $transaction: vi.fn()
   } as unknown as PrismaService;
 }
 
@@ -28,6 +30,13 @@ function createContextMock(tenantId = "tenant-a") {
   return {
     get: () => ({ requestId: "req-1", userId: "user-1", tenantId, role: "ADMIN" })
   } as RequestContextService;
+}
+
+function createAuditMock(): AuditService {
+  return {
+    createEntry: vi.fn().mockResolvedValue({}),
+    createEntryWithClient: vi.fn().mockResolvedValue({})
+  } as unknown as AuditService;
 }
 
 const createInput = {
@@ -52,16 +61,20 @@ function mockValidRelations(prisma: PrismaService, tenantId = "tenant-a", ownerI
 describe("ContractsService", () => {
   it("checks property, owner, renter and active tenantId before creating contracts", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     mockValidRelations(prisma, "tenant-a");
-    vi.mocked(prisma.rentalContract.create).mockResolvedValue({ id: "contract-1", tenantId: "tenant-a" } as never);
-    const service = new ContractsService(prisma, createContextMock("tenant-a"));
+    const tx = { rentalContract: { create: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-a" } as never) } };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), audit);
 
     await service.createContract(createInput);
 
     expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-a", deletedAt: null } });
     expect(prisma.owner.findFirst).toHaveBeenCalledWith({ where: { id: "owner-1", tenantId: "tenant-a", deletedAt: null } });
     expect(prisma.renter.findFirst).toHaveBeenCalledWith({ where: { id: "renter-1", tenantId: "tenant-a", deletedAt: null } });
-    expect(prisma.rentalContract.create).toHaveBeenCalledWith({
+    expect(tx.rentalContract.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ tenantId: "tenant-a", propertyId: "property-1", ownerId: "owner-1", renterId: "renter-1" })
     });
   });
@@ -69,7 +82,7 @@ describe("ContractsService", () => {
   it("rejects contracts when the property does not belong to the selected owner", async () => {
     const prisma = createPrismaMock();
     mockValidRelations(prisma, "tenant-a", "owner-2");
-    const service = new ContractsService(prisma, createContextMock("tenant-a"));
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.createContract(createInput)).rejects.toBeInstanceOf(BadRequestException);
 
@@ -79,7 +92,7 @@ describe("ContractsService", () => {
   it("lists contracts only for the active tenantId", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findMany).mockResolvedValue([] as never);
-    const service = new ContractsService(prisma, createContextMock("tenant-b"));
+    const service = new ContractsService(prisma, createContextMock("tenant-b"), createAuditMock());
 
     await service.listContracts();
 
@@ -89,7 +102,7 @@ describe("ContractsService", () => {
   it("lists active contracts only for status ACTIVE and the active tenantId", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findMany).mockResolvedValue([] as never);
-    const service = new ContractsService(prisma, createContextMock("tenant-c"));
+    const service = new ContractsService(prisma, createContextMock("tenant-c"), createAuditMock());
 
     await service.listActiveContracts();
 
@@ -102,7 +115,7 @@ describe("ContractsService", () => {
   it("gets contracts by id and active tenantId", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ id: "contract-1", tenantId: "tenant-d" } as never);
-    const service = new ContractsService(prisma, createContextMock("tenant-d"));
+    const service = new ContractsService(prisma, createContextMock("tenant-d"), createAuditMock());
 
     await service.getContractById("contract-1");
 
@@ -111,6 +124,8 @@ describe("ContractsService", () => {
 
   it("updates contracts with compound id_tenantId and validates reassigned relations", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const context = createContextMock("tenant-e");
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({
       id: "contract-1",
       tenantId: "tenant-e",
@@ -119,29 +134,41 @@ describe("ContractsService", () => {
       renterId: "renter-1"
     } as never);
     mockValidRelations(prisma, "tenant-e", "owner-2");
-    vi.mocked(prisma.rentalContract.update).mockResolvedValue({ id: "contract-1", tenantId: "tenant-e", ownerId: "owner-2" } as never);
-    const service = new ContractsService(prisma, createContextMock("tenant-e"));
+    const tx = { rentalContract: { update: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-e", ownerId: "owner-2" } as never) } };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, context, audit);
 
     await service.updateContract("contract-1", { ownerId: "owner-2" });
 
     expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-e", deletedAt: null } });
     expect(prisma.owner.findFirst).toHaveBeenCalledWith({ where: { id: "owner-2", tenantId: "tenant-e", deletedAt: null } });
-    expect(prisma.rentalContract.update).toHaveBeenCalledWith({
+    expect(tx.rentalContract.update).toHaveBeenCalledWith({
       where: { id_tenantId: { id: "contract-1", tenantId: "tenant-e" } },
       data: { ownerId: "owner-2" }
     });
   });
 
-  it("changes contract status with compound id_tenantId", async () => {
+  it("changes contract status with compound id_tenantId and writes audit", async () => {
     const prisma = createPrismaMock();
-    vi.mocked(prisma.rentalContract.update).mockResolvedValue({ id: "contract-1", tenantId: "tenant-f", status: "ACTIVE" } as never);
-    const service = new ContractsService(prisma, createContextMock("tenant-f"));
+    const audit = createAuditMock();
+    const tx = { rentalContract: { update: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-f", status: "ACTIVE" } as never) } };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, createContextMock("tenant-f"), audit);
 
     await service.changeContractStatus("contract-1", "ACTIVE");
 
-    expect(prisma.rentalContract.update).toHaveBeenCalledWith({
+    expect(tx.rentalContract.update).toHaveBeenCalledWith({
       where: { id_tenantId: { id: "contract-1", tenantId: "tenant-f" } },
       data: { status: "ACTIVE" }
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-f" }),
+      expect.objectContaining({ action: "contract.status.changed", entityId: "contract-1" })
+    );
   });
 });
