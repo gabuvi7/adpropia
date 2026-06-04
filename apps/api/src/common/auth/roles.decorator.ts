@@ -11,10 +11,9 @@ export const REQUIRES_ROLE_KEY = "requires-role";
 /**
  * Marca un endpoint (o controller entero) con la lista de roles permitidos.
  *
- * Hoy el enforcement está apagado (REQ-013, placeholder pasivo): si el rol
- * actual no alcanza, `RolesGuard` deja pasar pero loguea con
- * `enforcement: false`. Cuando US-007 active el switch, los requests con rol
- * insuficiente se rechazarán con `ForbiddenException`.
+ * El `RolesGuard` global rechaza con `ForbiddenException` cuando
+ * `AUTH_ROLE_ENFORCEMENT=true` y el rol actual no alcanza. Cuando está
+ * deshabilitado, el request prosigue pero se loguea un WARN.
  *
  * @example
  *   @RequiresRole("OWNER", "ADMIN")

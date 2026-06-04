@@ -128,12 +128,14 @@ describe("RolesGuard", () => {
       expect(warnSpy).not.toHaveBeenCalled();
     });
 
-    it("permite si el handler NO tiene metadata (enforcement disabled path for no metadata)", () => {
-      // This tests the enforcement=false variant: no metadata + enforcement=false → allow + WARN
-      // For enforcement=true variant, no metadata + enforcement=true → deny
-      // This specific test is for the enforcement=true case which was covered above.
-      // Here we verify the config query path.
-      expect(config.get).toBeDefined();
+    it("rechaza con ForbiddenException si el handler tiene metadata @RequiresRole pero no hay contexto (enforcement=true)", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as TenantRole[]);
+      const ctxService = createContextServiceMock(undefined);
+      const guard = createGuard(reflector, ctxService, config);
+
+      expect(() => guard.canActivate(createExecutionContext())).toThrow(ForbiddenException);
+      expect(warnSpy).toHaveBeenCalled();
     });
   });
 

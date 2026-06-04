@@ -18,7 +18,8 @@ import { LiquidationsService } from "./liquidations.service";
  * Cada handler valida el body/query con `parseRequestBody` (devuelve 400 con
  * mensaje en español rioplatense si falla) y delega al service. La metadata
  * `@RequiresRole(...)` viene de la matriz `LIQUIDATIONS_PERMISSIONS` (REQ-013);
- * el `RolesGuard` global está en placeholder mode hasta US-007.
+ * el `RolesGuard` global rechaza requests con rol insuficiente cuando
+ * `AUTH_ROLE_ENFORCEMENT=true` o los permite con WARN si está deshabilitado.
  */
 @Controller("liquidations")
 export class LiquidationsController {
