@@ -1,8 +1,11 @@
 import { z } from "zod";
 
+const requiredMessage = (required: string, invalidType: string) => (issue: { input: unknown }) =>
+  issue.input === undefined ? required : invalidType;
+
 const requiredId = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatorio.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatorio.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatorio.`);
 
@@ -10,7 +13,7 @@ const optionalId = z.string().trim().min(1).optional();
 
 const optionalIsoDate = (label: string) =>
   z
-    .string({ invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: `${label} debe ser texto.` })
     .trim()
     .min(1, `${label} es obligatoria.`)
     .refine((value) => !Number.isNaN(Date.parse(value)), `${label} debe ser una fecha ISO válida.`)
@@ -40,7 +43,7 @@ export const upcomingDuePaymentsQuerySchema = z
 
 export const cashFlowQuerySchema = z.object({
   month: z
-    .string({ required_error: "El mes es obligatorio.", invalid_type_error: "El mes debe ser texto." })
+    .string({ error: requiredMessage("El mes es obligatorio.", "El mes debe ser texto.") })
     .trim()
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "El mes debe tener formato AAAA-MM.")
 });

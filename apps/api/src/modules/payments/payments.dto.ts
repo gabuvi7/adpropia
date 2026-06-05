@@ -1,16 +1,19 @@
 import { z } from "zod";
 
-const currencySchema = z.enum(["ARS", "USD"], { errorMap: () => ({ message: "La moneda no es válida." }) });
+const requiredMessage = (required: string, invalidType: string) => (issue: { input: unknown }) =>
+  issue.input === undefined ? required : invalidType;
+
+const currencySchema = z.enum(["ARS", "USD"], { error: "La moneda no es válida." });
 
 const requiredId = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatorio.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatorio.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatorio.`);
 
 const isoDateString = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatoria.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatoria.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatoria.`)
     .refine((value) => !Number.isNaN(Date.parse(value)), `${label} debe ser una fecha ISO válida.`);
@@ -21,10 +24,10 @@ const positiveAmountSchema = (label: string) =>
   z
     .union([
       z
-        .string({ invalid_type_error: `${label} debe ser texto o número.` })
+        .string({ error: `${label} debe ser texto o número.` })
         .trim()
         .regex(/^\d+(\.\d{1,2})?$/, `${label} debe tener hasta dos decimales.`),
-      z.number({ invalid_type_error: `${label} debe ser texto o número.` }).finite(`${label} debe ser finito.`)
+      z.number({ error: `${label} debe ser texto o número.` }).finite(`${label} debe ser finito.`)
     ])
     .transform((value) => (typeof value === "number" ? value.toString() : value))
     .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), `${label} debe tener hasta dos decimales.`)
@@ -34,10 +37,10 @@ const nonNegativeAmountSchema = (label: string) =>
   z
     .union([
       z
-        .string({ invalid_type_error: `${label} debe ser texto o número.` })
+        .string({ error: `${label} debe ser texto o número.` })
         .trim()
         .regex(/^\d+(\.\d{1,2})?$/, `${label} debe tener hasta dos decimales.`),
-      z.number({ invalid_type_error: `${label} debe ser texto o número.` }).finite(`${label} debe ser finito.`)
+      z.number({ error: `${label} debe ser texto o número.` }).finite(`${label} debe ser finito.`)
     ])
     .transform((value) => (typeof value === "number" ? value.toString() : value))
     .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), `${label} debe tener hasta dos decimales.`)
@@ -53,12 +56,12 @@ export const createPaymentSchema = z.object(
     dueAt: isoDateString("La fecha de vencimiento"),
     paidAt: optionalIsoDateString("La fecha de pago"),
     notes: z
-      .string({ invalid_type_error: "Las notas deben ser texto." })
+      .string({ error: "Las notas deben ser texto." })
       .trim()
       .max(500, "Las notas no pueden superar los 500 caracteres.")
       .optional()
   },
-  { required_error: "Los datos del pago son obligatorios.", invalid_type_error: "Los datos del pago no son válidos." }
+  { error: requiredMessage("Los datos del pago son obligatorios.", "Los datos del pago no son válidos.") }
 );
 
 export const listPaymentsQuerySchema = z
@@ -74,7 +77,7 @@ export const balanceQuerySchema = z.object(
   {
     contractId: requiredId("El contrato")
   },
-  { required_error: "El contrato es obligatorio.", invalid_type_error: "El contrato no es válido." }
+  { error: requiredMessage("El contrato es obligatorio.", "El contrato no es válido.") }
 );
 
 export const listCashMovementsQuerySchema = z
