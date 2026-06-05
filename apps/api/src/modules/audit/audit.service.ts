@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@adpropia/database";
+import { parseAuditMetadata, redactAuditMetadata } from "@adpropia/shared";
 import { PrismaService } from "../../common/prisma";
 import type { RequestContext } from "../../common/request-context/request-context";
 import type { AuditLogQuery } from "./audit.dto";
@@ -43,6 +44,8 @@ export class AuditService {
     context: RequestContext,
     input: AuditEntryInput
   ) {
+    const metadata = this.normalizeMetadata(input.action, input.metadata);
+
     return client.auditLog.create({
       data: {
         tenantId: input.tenantId ?? context.tenantId,
@@ -51,9 +54,17 @@ export class AuditService {
         entityType: input.entityType,
         entityId: input.entityId ?? null,
         action: input.action,
-        ...(input.metadata !== undefined ? { metadata: input.metadata as Prisma.InputJsonValue } : {})
+        ...(metadata !== undefined ? { metadata: metadata as Prisma.InputJsonValue } : {})
       }
     });
+  }
+
+  private normalizeMetadata(action: string, metadata: Record<string, unknown> | undefined) {
+    if (metadata === undefined) {
+      return undefined;
+    }
+
+    return parseAuditMetadata(action, redactAuditMetadata(metadata));
   }
 
   private buildListWhere(query: AuditLogQuery): Prisma.AuditLogWhereInput {

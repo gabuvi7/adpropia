@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { REDACTED_AUDIT_VALUE } from "@adpropia/shared";
 import type { PrismaService } from "../../common/prisma";
 import { AuditService } from "./audit.service";
 
@@ -72,6 +73,53 @@ describe("AuditService", () => {
           action: "tenant.created",
           metadata: { slug: "my-tenant", name: "My Tenant" }
         }
+      });
+    });
+
+    it("rejects unknown metadata shapes before persistence", async () => {
+      const prisma = createPrismaMock();
+      const service = new AuditService(prisma);
+
+      await expect(
+        service.createEntry(context, {
+          entityType: "owner",
+          entityId: "owner-1",
+          action: "owner.updated",
+          metadata: {
+            changedFields: ["name"],
+            dto: { name: "Owner Name" }
+          }
+        })
+      ).rejects.toThrow("Invalid audit metadata for action owner.updated.");
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it("redacts sensitive metadata values before persistence", async () => {
+      const prisma = createPrismaMock();
+      vi.mocked(prisma.auditLog.create).mockResolvedValue({ id: "log-redacted" } as never);
+      const service = new AuditService(prisma);
+
+      await service.createEntry(context, {
+        entityType: "owner",
+        entityId: "owner-1",
+        action: "owner.updated",
+        metadata: {
+          changedFields: ["taxId", "paymentDetails", "name"],
+          taxId: "20-12345678-9",
+          paymentDetails: { account: "secret-account" },
+          name: "Owner Name"
+        }
+      });
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: {
+            changedFields: ["taxId", "paymentDetails", "name"],
+            taxId: REDACTED_AUDIT_VALUE,
+            paymentDetails: REDACTED_AUDIT_VALUE,
+            name: "Owner Name"
+          }
+        })
       });
     });
   });
