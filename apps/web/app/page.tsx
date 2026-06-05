@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { AppShell } from "../components/shared/app-shell";
 
 export default function LandingPage() {
@@ -9,7 +10,9 @@ export default function LandingPage() {
         <p>
           Primer módulo base para propietarios, inquilinos, propiedades, contratos, pagos, caja, liquidaciones y auditoría.
         </p>
-        <a href="/auth/login">Iniciar sesión</a>
+        <Button asChild>
+          <a href="/auth/login">Iniciar sesión</a>
+        </Button>
       </section>
     </AppShell>
   );
