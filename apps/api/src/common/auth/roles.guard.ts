@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
-import type { TenantRole } from "@adpropia/shared";
+import type { AuthRole } from "./auth-role";
 import { RequestContextService } from "../request-context/request-context.service";
 import { hasMinimumRole } from "./permissions";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
@@ -24,8 +24,8 @@ type RoleCheckLog = {
   endpoint: string;
   path: string | undefined;
   method: string | undefined;
-  expectedRoles: TenantRole[];
-  actualRole: TenantRole | undefined;
+  expectedRoles: AuthRole[];
+  actualRole: AuthRole | undefined;
   tenantId: string | undefined;
   userId: string | undefined;
   requestId: string | undefined;
@@ -42,7 +42,7 @@ export class RolesGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<TenantRole[] | undefined>(
+    const requiredRoles = this.reflector.getAllAndOverride<AuthRole[] | undefined>(
       REQUIRES_ROLE_KEY,
       [context.getHandler(), context.getClass()]
     );

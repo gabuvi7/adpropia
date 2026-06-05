@@ -1,7 +1,7 @@
 import { ForbiddenException, Logger, type ExecutionContext } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import type { Reflector } from "@nestjs/core";
-import type { TenantRole } from "@adpropia/shared";
+import type { AuthRole } from "./auth-role";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RequestContextService } from "../request-context/request-context.service";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
@@ -32,7 +32,7 @@ function createConfigServiceMock(getMock?: ReturnType<typeof vi.fn>): ConfigServ
 }
 
 function createContextServiceMock(
-  context?: { tenantId: string; userId: string; role: TenantRole; requestId: string }
+  context?: { tenantId: string; userId: string; role: AuthRole; requestId: string }
 ): RequestContextMock {
   return {
     getOptional: vi.fn().mockReturnValue(context)
@@ -103,7 +103,7 @@ describe("RolesGuard", () => {
 
     it("rechaza con ForbiddenException si el handler tiene metadata @RequiresRole pero el rol es insuficiente", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as AuthRole[]);
       const ctxService = createContextServiceMock({
         tenantId: "tenant-1", userId: "user-1", role: "READONLY", requestId: "req-1"
       });
@@ -115,7 +115,7 @@ describe("RolesGuard", () => {
 
     it("permite si el handler tiene metadata @RequiresRole y el rol es suficiente (hierarchy satisfied)", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as AuthRole[]);
       const ctxService = createContextServiceMock({
         tenantId: "tenant-1", userId: "user-1", role: "ADMIN", requestId: "req-1"
       });
@@ -130,7 +130,7 @@ describe("RolesGuard", () => {
 
     it("rechaza con ForbiddenException si el handler tiene metadata @RequiresRole pero no hay contexto (enforcement=true)", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as AuthRole[]);
       const ctxService = createContextServiceMock(undefined);
       const guard = createGuard(reflector, ctxService, config);
 
@@ -170,7 +170,7 @@ describe("RolesGuard", () => {
 
     it("permite pero loguea WARN si tiene metadata pero el rol es insuficiente", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OWNER", "ADMIN"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OWNER", "ADMIN"] as AuthRole[]);
       const ctxService = createContextServiceMock({
         tenantId: "tenant-1", userId: "user-1", role: "OPERATOR", requestId: "req-1"
       });
@@ -191,6 +191,88 @@ describe("RolesGuard", () => {
     });
   });
 
+  describe("SUPERADMIN hierarchy (global platform role)", () => {
+    let config: ConfigServiceMock;
+
+    beforeEach(() => {
+      config = createConfigServiceMock(vi.fn().mockReturnValue("true"));
+    });
+
+    it("SUPERADMIN passes @RequiresRole(OWNER) via hierarchy", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["OWNER"] as AuthRole[]);
+      const ctxService = createContextServiceMock({
+        tenantId: "tenant-1", userId: "user-super", role: "SUPERADMIN", requestId: "req-1"
+      });
+      const guard = createGuard(reflector, ctxService, config);
+
+      const result = guard.canActivate(createExecutionContext());
+      expect(result).toBe(true);
+      expect(logSpy).toHaveBeenCalled();
+    });
+
+    it("SUPERADMIN passes @RequiresRole(SUPERADMIN) explicitly", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["SUPERADMIN"] as AuthRole[]);
+      const ctxService = createContextServiceMock({
+        tenantId: "tenant-1", userId: "user-super", role: "SUPERADMIN", requestId: "req-1"
+      });
+      const guard = createGuard(reflector, ctxService, config);
+
+      const result = guard.canActivate(createExecutionContext());
+      expect(result).toBe(true);
+      expect(logSpy).toHaveBeenCalled();
+    });
+
+    it("OWNER fails @RequiresRole(SUPERADMIN) — hierarchy denied", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["SUPERADMIN"] as AuthRole[]);
+      const ctxService = createContextServiceMock({
+        tenantId: "tenant-1", userId: "user-owner", role: "OWNER", requestId: "req-1"
+      });
+      const guard = createGuard(reflector, ctxService, config);
+
+      expect(() => guard.canActivate(createExecutionContext())).toThrow(ForbiddenException);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("ADMIN fails @RequiresRole(SUPERADMIN)", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["SUPERADMIN"] as AuthRole[]);
+      const ctxService = createContextServiceMock({
+        tenantId: "tenant-1", userId: "user-admin", role: "ADMIN", requestId: "req-1"
+      });
+      const guard = createGuard(reflector, ctxService, config);
+
+      expect(() => guard.canActivate(createExecutionContext())).toThrow(ForbiddenException);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("OPERATOR fails @RequiresRole(SUPERADMIN)", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["SUPERADMIN"] as AuthRole[]);
+      const ctxService = createContextServiceMock({
+        tenantId: "tenant-1", userId: "user-op", role: "OPERATOR", requestId: "req-1"
+      });
+      const guard = createGuard(reflector, ctxService, config);
+
+      expect(() => guard.canActivate(createExecutionContext())).toThrow(ForbiddenException);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("READONLY fails @RequiresRole(SUPERADMIN)", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockReturnValue(["SUPERADMIN"] as AuthRole[]);
+      const ctxService = createContextServiceMock({
+        tenantId: "tenant-1", userId: "user-ro", role: "READONLY", requestId: "req-1"
+      });
+      const guard = createGuard(reflector, ctxService, config);
+
+      expect(() => guard.canActivate(createExecutionContext())).toThrow(ForbiddenException);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+  });
+
   describe("enforcement=true (default — unset config)", () => {
     let config: ConfigServiceMock;
 
@@ -200,7 +282,7 @@ describe("RolesGuard", () => {
 
     it("rechaza con ForbiddenException si el rol es insuficiente (default true)", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OPERATOR"] as AuthRole[]);
       const ctxService = createContextServiceMock({
         tenantId: "tenant-1", userId: "user-1", role: "READONLY", requestId: "req-1"
       });
@@ -234,7 +316,7 @@ describe("RolesGuard", () => {
 
     it("permite y loguea WARN si tiene metadata pero el contexto no tiene rol disponible", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["ADMIN"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["ADMIN"] as AuthRole[]);
       const ctxService = createContextServiceMock(undefined);
       const guard = createGuard(reflector, ctxService, config);
 
@@ -254,7 +336,7 @@ describe("RolesGuard", () => {
 
     it("permite pero loguea WARN si el rol del contexto NO está en la lista permitida", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OWNER", "ADMIN"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OWNER", "ADMIN"] as AuthRole[]);
       const ctxService = createContextServiceMock({
         tenantId: "tenant-1",
         userId: "user-1",
@@ -283,7 +365,7 @@ describe("RolesGuard", () => {
 
     it("permite y loguea INFO si el rol del contexto SÍ está en la lista", () => {
       const reflector = createReflectorMock();
-      reflector.getAllAndOverride.mockReturnValue(["OWNER", "ADMIN"] as TenantRole[]);
+      reflector.getAllAndOverride.mockReturnValue(["OWNER", "ADMIN"] as AuthRole[]);
       const ctxService = createContextServiceMock({
         tenantId: "tenant-1",
         userId: "user-1",

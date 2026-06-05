@@ -1,5 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import type { TenantRole } from "@adpropia/shared";
+import { PLATFORM_ROLE_SUPERADMIN, type AuthRole } from "../auth/auth-role";
 import { PrismaService } from "../prisma/prisma.service";
 
 export type Auth0JwtClaims = {
@@ -8,11 +8,23 @@ export type Auth0JwtClaims = {
   [key: string]: unknown;
 };
 
+export const AUTH0_SUPERADMIN_CLAIM = "https://adpropia.app/superadmin";
+export const AUTH0_PLATFORM_ROLES_CLAIM = "https://adpropia.com/roles";
+
 export type TenantResolution = {
   tenantId: string;
   userId: string;
-  role: TenantRole;
+  role: AuthRole;
 };
+
+function hasSuperadminClaim(claims: Auth0JwtClaims): boolean {
+  if (claims[AUTH0_SUPERADMIN_CLAIM] === true) {
+    return true;
+  }
+
+  const platformRoles = claims[AUTH0_PLATFORM_ROLES_CLAIM];
+  return Array.isArray(platformRoles) && platformRoles.includes(PLATFORM_ROLE_SUPERADMIN);
+}
 
 @Injectable()
 export class Auth0TenantResolver {
@@ -22,13 +34,36 @@ export class Auth0TenantResolver {
 
   async resolve(claims: Auth0JwtClaims): Promise<TenantResolution> {
     const { org_id: auth0OrgId, sub: auth0UserId } = claims;
+    const isSuperadmin = hasSuperadminClaim(claims);
 
-    if (!auth0OrgId) {
+    if (!auth0OrgId && !isSuperadmin) {
       throw new UnauthorizedException("Falta organizacion en el token.");
     }
 
     if (!auth0UserId) {
       throw new UnauthorizedException("Falta usuario en el token.");
+    }
+
+    if (isSuperadmin && !auth0OrgId) {
+      const user = await this.prisma.user.findUnique({ where: { auth0UserId } } as never);
+
+      if (!user) {
+        this.logger.warn({ event: "user_not_found", auth0UserId });
+        throw new UnauthorizedException("Usuario no encontrado.");
+      }
+
+      if (!user.isActive) {
+        this.logger.warn({ event: "user_inactive", auth0UserId });
+        throw new UnauthorizedException("El usuario no esta activo.");
+      }
+
+      this.logger.log({ event: "platform_role_resolved", userId: user.id, role: PLATFORM_ROLE_SUPERADMIN });
+
+      return {
+        tenantId: "platform",
+        userId: user.id,
+        role: PLATFORM_ROLE_SUPERADMIN
+      };
     }
 
     const [tenant, user] = await Promise.all([
@@ -56,6 +91,15 @@ export class Auth0TenantResolver {
       throw new UnauthorizedException("El usuario no esta activo.");
     }
 
+    if (isSuperadmin) {
+      this.logger.log({ event: "superadmin_resolved", tenantId: tenant.id, userId: user.id });
+      return {
+        tenantId: tenant.id,
+        userId: user.id,
+        role: PLATFORM_ROLE_SUPERADMIN
+      };
+    }
+
     const membership = await this.prisma.tenantUser.findUnique({
       where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } }
     });
@@ -75,7 +119,7 @@ export class Auth0TenantResolver {
     return {
       tenantId: tenant.id,
       userId: user.id,
-      role: membership.role as TenantRole
+      role: membership.role as AuthRole
     };
   }
 }

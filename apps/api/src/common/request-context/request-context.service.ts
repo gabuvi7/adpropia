@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import type { TenantRole } from "@adpropia/shared";
+import { normalizeAuthRole, PLATFORM_ROLE_SUPERADMIN, type AuthRole } from "../auth/auth-role";
 import type { RequestContext } from "./request-context";
 
 type HeaderValue = string | string[] | undefined;
@@ -9,10 +9,8 @@ type RequestHeaders = Record<string, HeaderValue>;
 export type JwtResolution = {
   userId: string;
   tenantId: string;
-  role: TenantRole;
+  role: AuthRole;
 };
-
-const tenantRoles = ["OWNER", "ADMIN", "OPERATOR", "READONLY"] as const;
 
 function firstHeader(value: HeaderValue): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -81,15 +79,19 @@ export class RequestContextService {
       throw new InvalidRequestContextError("El contexto temporal por headers no está habilitado en producción.");
     }
 
-    const role = firstHeader(headers["x-role"])?.trim() ?? "OPERATOR";
-    if (!tenantRoles.includes(role as RequestContext["role"])) {
+    const role = normalizeAuthRole(firstHeader(headers["x-role"]) ?? "OPERATOR");
+    if (!role) {
       throw new InvalidRequestContextError("El rol temporal enviado no es válido.");
     }
 
+    const tenantId = role === PLATFORM_ROLE_SUPERADMIN
+      ? firstHeader(headers["x-tenant-id"])?.trim() || "platform"
+      : requiredHeader(headers, "x-tenant-id", "x-tenant-id");
+
     return {
-      tenantId: requiredHeader(headers, "x-tenant-id", "x-tenant-id"),
+      tenantId,
       userId: firstHeader(headers["x-user-id"])?.trim() || "usuario-desarrollo",
-      role: role as RequestContext["role"],
+      role,
       requestId: firstHeader(headers["x-request-id"])?.trim() || randomUUID()
     };
   }
