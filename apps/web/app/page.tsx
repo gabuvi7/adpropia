@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AppShell } from "../components/shared/app-shell";
 
 export default function LandingPage() {
@@ -10,7 +9,7 @@ export default function LandingPage() {
         <p>
           Primer módulo base para propietarios, inquilinos, propiedades, contratos, pagos, caja, liquidaciones y auditoría.
         </p>
-        <Link href="/dashboard">Ir al panel</Link>
+        <a href="/auth/login">Iniciar sesión</a>
       </section>
     </AppShell>
   );
