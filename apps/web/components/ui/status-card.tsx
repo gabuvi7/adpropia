@@ -1,8 +1,8 @@
 export function StatusCard({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <article style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-      <p style={{ color: "var(--muted)", margin: 0 }}>{label}</p>
-      <strong style={{ display: "block", fontSize: 28, marginTop: 8 }}>{value}</strong>
+    <article className="bg-card border border-border rounded-xl p-5">
+      <p className="text-muted-foreground m-0">{label}</p>
+      <strong className="block text-[28px] mt-2">{value}</strong>
     </article>
   );
 }

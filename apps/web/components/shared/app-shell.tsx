@@ -10,20 +10,20 @@ type AppShellProps = Readonly<{
 
 export function AppShell({ tenantName, children, userName, role, logoutUrl }: AppShellProps) {
   return (
-    <main style={{ minHeight: "100vh", padding: "32px" }}>
-      <header style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <main className="min-h-screen p-8">
+      <header className="mb-8 flex justify-between items-start">
         <div>
           <strong>{tenantName}</strong>
-          <p style={{ color: "var(--muted)", margin: "8px 0 0" }}>Espacio de trabajo con aislamiento por cliente</p>
+          <p className="text-muted-foreground mt-2">Espacio de trabajo con aislamiento por cliente</p>
         </div>
         {userName && (
-          <div style={{ textAlign: "right", fontSize: "0.875rem" }}>
+          <div className="text-right text-sm">
             <span>{userName}</span>
-            {role && <span style={{ color: "var(--muted)", marginLeft: "8px" }}>({role})</span>}
+            {role && <span className="text-muted-foreground ml-2">({role})</span>}
             {logoutUrl && (
               <>
                 {" — "}
-                <a href={logoutUrl} style={{ color: "var(--muted)" }}>Salir</a>
+                <a href={logoutUrl} className="text-muted-foreground hover:text-foreground transition-colors">Salir</a>
               </>
             )}
           </div>
