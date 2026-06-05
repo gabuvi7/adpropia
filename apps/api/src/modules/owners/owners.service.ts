@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Owner, Prisma } from "@adpropia/database";
+import { buildChangedFieldsMetadata } from "@adpropia/shared";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 import type { CreateOwnerDto, UpdateOwnerDto } from "./owners.dto";
 
 export type OwnerRecord = Owner;
@@ -10,11 +12,13 @@ export type OwnerRecord = Owner;
 export class OwnersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    private readonly audit: AuditService
   ) {}
 
   async createOwner(input: CreateOwnerDto): Promise<OwnerRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     const data = {
       tenantId,
       displayName: input.displayName,
@@ -25,7 +29,18 @@ export class OwnersService {
     };
 
     try {
-      return await this.prisma.owner.create({ data });
+      return await this.prisma.$transaction(async (tx) => {
+        const owner = await tx.owner.create({ data });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "owner",
+          entityId: owner.id,
+          action: "owner.created",
+          metadata: { name: input.displayName }
+        });
+
+        return owner;
+      });
     } catch (error) {
       if (hasPrismaCode(error, "P2002")) {
         throw new BadRequestException("Ya existe un propietario con esos datos en esta inmobiliaria.");
@@ -54,7 +69,8 @@ export class OwnersService {
   }
 
   async updateOwner(id: string, input: UpdateOwnerDto): Promise<OwnerRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     const owner = await this.findActiveOwner(id, tenantId);
 
     if (!owner) {
@@ -62,9 +78,20 @@ export class OwnersService {
     }
 
     try {
-      return await this.prisma.owner.update({
-        where: { id_tenantId: { id, tenantId } },
-        data: toOwnerUpdateData(input)
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.owner.update({
+          where: { id_tenantId: { id, tenantId } },
+          data: toOwnerUpdateData(input)
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "owner",
+          entityId: id,
+          action: "owner.updated",
+          metadata: buildChangedFieldsMetadata(input)
+        });
+
+        return updated;
       });
     } catch (error) {
       if (hasPrismaCode(error, "P2002")) {

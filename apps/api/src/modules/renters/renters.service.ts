@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, Renter } from "@adpropia/database";
+import { buildChangedFieldsMetadata } from "@adpropia/shared";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 import type { CreateRenterDto, UpdateRenterDto } from "./renters.dto";
 
 export type RenterRecord = Renter;
@@ -10,11 +12,13 @@ export type RenterRecord = Renter;
 export class RentersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    private readonly audit: AuditService
   ) {}
 
   async createRenter(input: CreateRenterDto): Promise<RenterRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     const data = {
       tenantId,
       displayName: input.displayName,
@@ -25,7 +29,18 @@ export class RentersService {
     };
 
     try {
-      return await this.prisma.renter.create({ data });
+      return await this.prisma.$transaction(async (tx) => {
+        const renter = await tx.renter.create({ data });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "renter",
+          entityId: renter.id,
+          action: "renter.created",
+          metadata: { name: input.displayName }
+        });
+
+        return renter;
+      });
     } catch (error) {
       if (hasPrismaCode(error, "P2002")) {
         throw new BadRequestException("Ya existe un inquilino con esos datos en esta inmobiliaria.");
@@ -54,7 +69,8 @@ export class RentersService {
   }
 
   async updateRenter(id: string, input: UpdateRenterDto): Promise<RenterRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     const renter = await this.findActiveRenter(id, tenantId);
 
     if (!renter) {
@@ -62,9 +78,20 @@ export class RentersService {
     }
 
     try {
-      return await this.prisma.renter.update({
-        where: { id_tenantId: { id, tenantId } },
-        data: toRenterUpdateData(input)
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.renter.update({
+          where: { id_tenantId: { id, tenantId } },
+          data: toRenterUpdateData(input)
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "renter",
+          entityId: id,
+          action: "renter.updated",
+          metadata: buildChangedFieldsMetadata(input)
+        });
+
+        return updated;
       });
     } catch (error) {
       if (hasPrismaCode(error, "P2002")) {
