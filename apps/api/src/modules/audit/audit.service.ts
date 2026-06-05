@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import type { RequestContext } from "../../common/request-context/request-context";
+import type { AuditLogQuery } from "./audit.dto";
 
 export type AuditEntryInput = Readonly<{
   entityType: string;
@@ -15,6 +16,23 @@ export type AuditEntryInput = Readonly<{
 @Injectable()
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listAuditLogs(query: AuditLogQuery) {
+    const where = this.buildListWhere(query);
+    const page = query.page;
+    const pageSize = query.pageSize;
+    const [items, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      this.prisma.auditLog.count({ where })
+    ]);
+
+    return { items, page, pageSize, total };
+  }
 
   async createEntry(context: RequestContext, input: AuditEntryInput) {
     return this.createEntryWithClient(this.prisma, context, input);
@@ -36,5 +54,23 @@ export class AuditService {
         ...(input.metadata !== undefined ? { metadata: input.metadata as Prisma.InputJsonValue } : {})
       }
     });
+  }
+
+  private buildListWhere(query: AuditLogQuery): Prisma.AuditLogWhereInput {
+    return {
+      ...(query.tenantId ? { tenantId: query.tenantId } : {}),
+      ...(query.entityType ? { entityType: query.entityType } : {}),
+      ...(query.entityId ? { entityId: query.entityId } : {}),
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.userId ? { userId: query.userId } : {}),
+      ...(query.from || query.to
+        ? {
+            createdAt: {
+              ...(query.from ? { gte: query.from } : {}),
+              ...(query.to ? { lte: query.to } : {})
+            }
+          }
+        : {})
+    };
   }
 }

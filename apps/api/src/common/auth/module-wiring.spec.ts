@@ -4,6 +4,7 @@ import { AppModule } from "../../app.module";
 import { LiquidationsModule } from "../../modules/liquidations/liquidations.module";
 import {
   ADMIN_PROVISIONING_PERMISSIONS,
+  AUDIT_LOG_PERMISSIONS,
   CORE_ENTITY_PERMISSIONS,
   PAYMENTS_PERMISSIONS,
   CASH_MOVEMENTS_PERMISSIONS,
@@ -12,6 +13,7 @@ import {
 } from "./permissions";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
 import { AdminProvisioningController } from "../../modules/admin/admin-provisioning.controller";
+import { AuditController } from "../../modules/audit/audit.controller";
 import { ContractsController } from "../../modules/contracts/contracts.controller";
 import { OwnersController } from "../../modules/owners/owners.controller";
 import { RentersController } from "../../modules/renters/renters.controller";
@@ -194,6 +196,13 @@ describe("@RequiresRole metadata inventory", () => {
     it("getOutstandingBalances → REPORTS_PERMISSIONS.outstandingBalances", () => {
       expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getOutstandingBalances))
         .toEqual([...REPORTS_PERMISSIONS.outstandingBalances]);
+    });
+  });
+
+  describe("AuditController", () => {
+    it("list → AUDIT_LOG_PERMISSIONS.read", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, AuditController.prototype.list))
+        .toEqual([...AUDIT_LOG_PERMISSIONS.read]);
     });
   });
 
