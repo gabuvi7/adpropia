@@ -17,7 +17,8 @@
       "@adpropia/shared": ["packages/shared/src/index.ts"],
       "@adpropia/shared/*": ["packages/shared/src/*"],
       "@adpropia/database": ["packages/database/src/index.ts"],
-      "@adpropia/database/*": ["packages/database/src/*"]
+      "@adpropia/database/*": ["packages/database/src/*"],
+      "@/*": ["./apps/web/*"]
     }
   }
 }

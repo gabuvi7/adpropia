@@ -1,10 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { auth0 } from "./lib/auth0";
+import { requireSession } from "./lib/auth-guard";
 
-export function proxy(request: NextRequest) {
-  // Future auth route protection belongs here, not middleware.ts.
-  // Tenant resolution by host/subdomain will also start here before hitting App Router pages.
-  return NextResponse.next({ request });
+export async function proxy(request: NextRequest) {
+  const authRes = await auth0.middleware(request);
+  const session = await auth0.getSession(request);
+  const guardResult = requireSession(request, session);
+  if (guardResult) return guardResult;
+  return authRes;
 }
 
 export const config = {

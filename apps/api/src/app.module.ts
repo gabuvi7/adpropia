@@ -16,6 +16,7 @@ import { PropertiesModule } from "./modules/properties/properties.module";
 import { RentersModule } from "./modules/renters/renters.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
+import { AuthModule } from "./modules/auth/auth.module";
 
 export const appModules = [
   AdminModule,
@@ -27,7 +28,8 @@ export const appModules = [
   PaymentsModule,
   LiquidationsModule,
   ReportsModule,
-  AuditModule
+  AuditModule,
+  AuthModule
 ] as const;
 
 const protectedRoutes = [
@@ -40,7 +42,8 @@ const protectedRoutes = [
   "payments",
   "cash-movements",
   "reports",
-  "liquidations"
+  "liquidations",
+  "auth"
 ] as const;
 
 @Module({
