@@ -34,6 +34,9 @@ function createPrismaMock() {
     depositPact: {
       create: vi.fn()
     },
+    rentPeriod: {
+      createMany: vi.fn()
+    },
     $transaction: vi.fn()
   } as unknown as PrismaService;
 }
@@ -425,5 +428,87 @@ describe("ContractsService", () => {
       }
     });
     expect(prisma.guarantee.create).not.toHaveBeenCalled();
+  });
+
+  it("activates contracts by generating adjustment-aware estimated monthly rent periods", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({
+      id: "contract-1",
+      tenantId: "tenant-a",
+      status: "PENDING_SIGNATURE",
+      startsAt: new Date("2026-05-01T00:00:00.000Z"),
+      endsAt: new Date("2026-07-31T00:00:00.000Z"),
+      dueDayOfMonth: 10,
+      currency: "ARS",
+      monthlyTotalAmount: "100000.00",
+      rentAmount: "100000.00",
+      adjustmentIndexType: "IPC",
+      adjustmentPeriodMonths: 1
+    } as never);
+    const tx = {
+      rentalContract: { update: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-a", status: "ACTIVE" } as never) },
+      rentPeriod: { createMany: vi.fn().mockResolvedValue({ count: 3 } as never) }
+    };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.activateContractSchedule("contract-1", {
+      activatedAt: "2026-05-01T00:00:00.000Z",
+      estimatedAmount: "100000.00",
+      estimatedIndexValue: "120.500000",
+      estimatedIndexSource: "last_known_ipc"
+    });
+
+    expect(tx.rentPeriod.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          tenantId: "tenant-a",
+          contractId: "contract-1",
+          periodStart: new Date("2026-05-01T00:00:00.000Z"),
+          periodEnd: new Date("2026-05-31T00:00:00.000Z"),
+          dueAt: new Date("2026-05-10T00:00:00.000Z"),
+          calculationState: "ESTIMATED",
+          estimatedAmount: "100000.00",
+          realAmount: null,
+          estimatedIndexType: "IPC",
+          estimatedIndexValue: "120.500000",
+          estimatedIndexSource: "last_known_ipc"
+        }),
+        expect.objectContaining({ periodStart: new Date("2026-06-01T00:00:00.000Z"), dueAt: new Date("2026-06-10T00:00:00.000Z") }),
+        expect.objectContaining({ periodStart: new Date("2026-07-01T00:00:00.000Z"), dueAt: new Date("2026-07-10T00:00:00.000Z") })
+      ],
+      skipDuplicates: true
+    });
+    expect(tx.rentalContract.update).toHaveBeenCalledWith({
+      where: { id_tenantId: { id: "contract-1", tenantId: "tenant-a" } },
+      data: { status: "ACTIVE" }
+    });
+  });
+
+  it("rejects schedule activation when the contract has no monthly amount", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({
+      id: "contract-1",
+      tenantId: "tenant-a",
+      startsAt: new Date("2026-05-01T00:00:00.000Z"),
+      endsAt: new Date("2026-05-31T00:00:00.000Z"),
+      dueDayOfMonth: 10,
+      currency: "ARS",
+      monthlyTotalAmount: null,
+      rentAmount: null,
+      adjustmentIndexType: "IPC",
+      adjustmentPeriodMonths: 1
+    } as never);
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expect(
+      service.activateContractSchedule("contract-1", {
+        activatedAt: "2026-05-01T00:00:00.000Z",
+        estimatedIndexValue: "120.500000",
+        estimatedIndexSource: "last_known_ipc"
+      })
+    ).rejects.toThrow("El contrato necesita un monto mensual para generar el cronograma de alquiler.");
   });
 });

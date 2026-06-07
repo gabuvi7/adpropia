@@ -85,6 +85,13 @@ export interface DefineContractDepositDto {
   notes?: string;
 }
 
+export interface ActivateContractScheduleDto {
+  activatedAt: string;
+  estimatedAmount?: string;
+  estimatedIndexValue?: string;
+  estimatedIndexSource?: string;
+}
+
 @Injectable()
 export class ContractsService {
   constructor(
@@ -339,6 +346,40 @@ export class ContractsService {
       });
     } catch {
       throw new BadRequestException("No pudimos registrar el depósito pactado del contrato. Revisá los datos enviados.");
+    }
+  }
+
+  async activateContractSchedule(contractId: string, input: ActivateContractScheduleDto): Promise<ContractRecord> {
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
+    const contract = await this.findContract(contractId, tenantId);
+    if (!contract) {
+      throw new NotFoundException("No encontramos el contrato solicitado.");
+    }
+
+    const monthlyAmount = input.estimatedAmount ?? contract.monthlyTotalAmount?.toString() ?? contract.rentAmount?.toString();
+    if (!monthlyAmount) {
+      throw new BadRequestException("El contrato necesita un monto mensual para generar el cronograma de alquiler.");
+    }
+
+    const periods = buildEstimatedRentPeriods(contract, monthlyAmount, input);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.rentPeriod.createMany({ data: periods, skipDuplicates: true });
+        const activated = await tx.rentalContract.update({ where: { id_tenantId: { id: contractId, tenantId } }, data: { status: "ACTIVE" } });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "contract",
+          entityId: contractId,
+          action: "contract.schedule_activated",
+          metadata: { generatedPeriods: periods.length, estimatedIndexSource: input.estimatedIndexSource ?? null }
+        });
+
+        return activated;
+      });
+    } catch {
+      throw new BadRequestException("No pudimos activar el cronograma de alquiler. Revisá los datos enviados.");
     }
   }
 
@@ -632,6 +673,62 @@ function toDepositPactCreateData(input: DefineContractDepositDto, contractId: st
     refundCashMovementId: null,
     retentionCashMovementId: null
   };
+}
+
+function buildEstimatedRentPeriods(
+  contract: ContractRecord,
+  estimatedAmount: string,
+  input: ActivateContractScheduleDto
+): Prisma.RentPeriodUncheckedCreateInput[] {
+  const periods: Prisma.RentPeriodUncheckedCreateInput[] = [];
+  const startsAt = startOfMonth(contract.startsAt);
+  const endsAt = startOfMonth(contract.endsAt);
+  let cursor = startsAt;
+
+  while (cursor <= endsAt) {
+    const periodStart = new Date(cursor);
+    const periodEnd = endOfMonth(periodStart);
+    const dueAt = buildDueDate(periodStart, contract.dueDayOfMonth);
+
+    periods.push({
+      tenantId: contract.tenantId,
+      contractId: contract.id,
+      periodStart,
+      periodEnd,
+      dueAt,
+      currency: contract.currency,
+      calculationState: "ESTIMATED",
+      estimatedAmount,
+      realAmount: null,
+      estimatedIndexType: contract.adjustmentIndexType,
+      estimatedIndexValue: input.estimatedIndexValue ?? null,
+      estimatedIndexSource: input.estimatedIndexSource ?? null,
+      realIndexValue: null,
+      realIndexSource: null,
+      reconciledAt: null
+    });
+
+    cursor = addMonths(cursor, 1);
+  }
+
+  return periods;
+}
+
+function startOfMonth(value: Date): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
+}
+
+function endOfMonth(value: Date): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0));
+}
+
+function addMonths(value: Date, months: number): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + months, 1));
+}
+
+function buildDueDate(periodStart: Date, dueDayOfMonth: number): Date {
+  const lastDay = endOfMonth(periodStart).getUTCDate();
+  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), Math.min(dueDayOfMonth, lastDay)));
 }
 
 function toDate(value: string): Date {
