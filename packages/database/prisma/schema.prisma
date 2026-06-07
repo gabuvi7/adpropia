@@ -89,6 +89,11 @@ enum Currency {
   USD
 }
 
+enum PersonaKind {
+  FISICA
+  JURIDICA
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   auth0OrgId   String?      @unique
@@ -100,6 +105,7 @@ model Tenant {
   updatedAt    DateTime     @updatedAt
 
   users                        TenantUser[]
+  personas                     Persona[]
   settings                     TenantSettings?
   features                     TenantFeature[]
   subscriptions                TenantSubscription[]
@@ -136,6 +142,66 @@ model User {
   manualAdjustmentsCreated LiquidationManualAdjustment[] @relation("LiquidationManualAdjustmentCreatedBy")
 
   @@map("users")
+}
+
+model Persona {
+  id          String      @id @default(cuid())
+  tenantId    String
+  kind        PersonaKind
+  displayName String
+  email       String?
+  phone       String?
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fisica   PersonaFisica?
+  juridica PersonaJuridica?
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([tenantId, displayName])
+  @@index([tenantId, kind])
+  @@map("personas")
+}
+
+model PersonaFisica {
+  id          String   @id @default(cuid())
+  tenantId    String
+  personaId   String   @unique
+  firstName   String?
+  lastName    String?
+  dni         String?
+  cuit        String?
+  dateOfBirth DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  persona Persona @relation(fields: [personaId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([personaId, tenantId])
+  @@unique([tenantId, dni])
+  @@unique([tenantId, cuit])
+  @@index([tenantId])
+  @@map("persona_fisicas")
+}
+
+model PersonaJuridica {
+  id        String   @id @default(cuid())
+  tenantId  String
+  personaId String   @unique
+  legalName String
+  cuit      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persona Persona @relation(fields: [personaId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([personaId, tenantId])
+  @@unique([tenantId, cuit])
+  @@index([tenantId])
+  @@map("persona_juridicas")
 }
 
 model TenantUser {
