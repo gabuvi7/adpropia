@@ -30,10 +30,10 @@ export class PersonasRepository {
       );
     } catch (error) {
       if (hasPrismaCode(error, "P2002")) {
-        throw new BadRequestException("A persona with this identity already exists in this tenant.");
+        throw new BadRequestException("Ya existe una persona con esta identidad en esta inmobiliaria.");
       }
 
-      throw new BadRequestException("Could not create persona with the provided identity data.");
+      throw new BadRequestException("No pudimos crear la persona con los datos de identidad enviados.");
     }
   }
 
@@ -49,7 +49,7 @@ export class PersonasRepository {
     const persona = await this.findById(id);
 
     if (!persona) {
-      throw new BadRequestException("Persona does not belong to the active tenant.");
+      throw new BadRequestException("La persona indicada no pertenece a esta inmobiliaria.");
     }
 
     return persona;

@@ -5,32 +5,32 @@ const requiredMessage = (required: string, invalidType: string) => (issue: { inp
 
 const optionalText = (message: string) => z.string({ error: message }).trim().min(1, message).optional();
 
-export const personaKindSchema = z.enum(["FISICA", "JURIDICA"]);
+export const personaKindSchema = z.enum(["FISICA", "JURIDICA"], { error: "El tipo de persona no es válido." });
 
 export const personaFisicaSchema = z
   .object({
-    firstName: optionalText("First name cannot be empty."),
-    lastName: optionalText("Last name cannot be empty."),
-    dni: optionalText("DNI cannot be empty."),
-    cuit: optionalText("CUIT cannot be empty."),
-    dateOfBirth: z.coerce.date({ error: "Date of birth must be a valid date." }).optional()
+    firstName: optionalText("El nombre no puede estar vacío."),
+    lastName: optionalText("El apellido no puede estar vacío."),
+    dni: optionalText("El DNI no puede estar vacío."),
+    cuit: optionalText("El CUIT no puede estar vacío."),
+    dateOfBirth: z.coerce.date({ error: "La fecha de nacimiento debe ser válida." }).optional()
   })
   .strict()
   .refine((data) => data.dni !== undefined || data.cuit !== undefined, {
-    message: "A natural person must include DNI and/or CUIT.",
+    message: "Una persona física debe incluir DNI y/o CUIT.",
     path: ["dni"]
   });
 
 export const personaJuridicaSchema = z
   .object({
     legalName: z
-      .string({ error: requiredMessage("Legal name is required.", "Legal name must be text.") })
+      .string({ error: requiredMessage("La razón social es obligatoria.", "La razón social debe ser texto.") })
       .trim()
-      .min(1, "Legal name is required."),
+      .min(1, "La razón social es obligatoria."),
     cuit: z
-      .string({ error: requiredMessage("A legal person must include CUIT.", "CUIT must be text.") })
+      .string({ error: requiredMessage("Una persona jurídica debe incluir CUIT.", "El CUIT debe ser texto.") })
       .trim()
-      .min(1, "A legal person must include CUIT.")
+      .min(1, "Una persona jurídica debe incluir CUIT.")
   })
   .strict();
 
@@ -38,33 +38,33 @@ export const createPersonaSchema = z
   .object(
     {
       displayName: z
-        .string({ error: requiredMessage("Display name is required.", "Display name must be text.") })
+        .string({ error: requiredMessage("El nombre visible es obligatorio.", "El nombre visible debe ser texto.") })
         .trim()
-        .min(1, "Display name is required."),
+        .min(1, "El nombre visible es obligatorio."),
       kind: personaKindSchema,
-      email: z.string({ error: "Email must be text." }).trim().email("Email is invalid.").optional(),
-      phone: optionalText("Phone cannot be empty."),
+      email: z.string({ error: "El email debe ser texto." }).trim().email("El email no es válido.").optional(),
+      phone: optionalText("El teléfono no puede estar vacío."),
       fisica: personaFisicaSchema.optional(),
       juridica: personaJuridicaSchema.optional()
     },
-    { error: requiredMessage("Persona data is required.", "Persona data is invalid.") }
+    { error: requiredMessage("Los datos de la persona son obligatorios.", "Los datos de la persona no son válidos.") }
   )
   .strict()
   .superRefine((data, ctx) => {
     if (data.kind === "FISICA" && data.fisica === undefined) {
-      ctx.addIssue({ code: "custom", path: ["fisica"], message: "Natural person details are required." });
+      ctx.addIssue({ code: "custom", path: ["fisica"], message: "Tenés que enviar los datos de persona física." });
     }
 
     if (data.kind === "FISICA" && data.juridica !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["juridica"], message: "A natural person cannot include legal person details." });
+      ctx.addIssue({ code: "custom", path: ["juridica"], message: "Una persona física no puede incluir datos de persona jurídica." });
     }
 
     if (data.kind === "JURIDICA" && data.juridica === undefined) {
-      ctx.addIssue({ code: "custom", path: ["juridica"], message: "Legal person details are required." });
+      ctx.addIssue({ code: "custom", path: ["juridica"], message: "Tenés que enviar los datos de persona jurídica." });
     }
 
     if (data.kind === "JURIDICA" && data.fisica !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["fisica"], message: "A legal person cannot include natural person details." });
+      ctx.addIssue({ code: "custom", path: ["fisica"], message: "Una persona jurídica no puede incluir datos de persona física." });
     }
   });
 
