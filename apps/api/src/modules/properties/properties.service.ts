@@ -104,7 +104,7 @@ export class PropertiesService {
         return property;
       });
     } catch {
-      throw new BadRequestException("Property unit could not be created. Check the submitted data.");
+      throw new BadRequestException("No pudimos crear la unidad funcional. Revisá los datos enviados.");
     }
   }
 
@@ -167,7 +167,7 @@ export class PropertiesService {
 
     const property = await this.findActiveProperty(id, tenantId);
     if (!property) {
-      throw new NotFoundException("Property was not found.");
+      throw new NotFoundException("No encontramos la propiedad solicitada.");
     }
 
     await this.ensurePropertyHasNoActiveContract(id, tenantId);
@@ -189,7 +189,7 @@ export class PropertiesService {
         });
       });
     } catch {
-      throw new BadRequestException("Property ownership could not be updated. Check the submitted data.");
+      throw new BadRequestException("No pudimos actualizar los propietarios de la propiedad. Revisá los datos enviados.");
     }
   }
 
@@ -207,7 +207,7 @@ export class PropertiesService {
   private async ensurePropertyHasNoActiveContract(propertyId: string, tenantId: string): Promise<void> {
     const activeContracts = await this.prisma.rentalContract.count({ where: { tenantId, propertyId, status: "ACTIVE" } });
     if (activeContracts > 0) {
-      throw new BadRequestException("Ownership cannot be changed while an active contract references the property.");
+      throw new BadRequestException("No podés cambiar la titularidad mientras haya un contrato activo asociado a la propiedad.");
     }
   }
 
@@ -215,14 +215,14 @@ export class PropertiesService {
     const uniquePersonaIds = [...new Set(personaIds)];
     const personas = await this.prisma.persona.findMany({ where: { tenantId, id: { in: uniquePersonaIds }, deletedAt: null }, select: { id: true } });
     if (personas.length !== uniquePersonaIds.length) {
-      throw new BadRequestException("Every owner persona must belong to the active tenant.");
+      throw new BadRequestException("Todos los propietarios deben pertenecer a esta inmobiliaria.");
     }
   }
 
   private async ensurePropertyTypeExists(propertyTypeId: string): Promise<{ code: PropertyTypeCode }> {
     const propertyType = await this.prisma.propertyTypeCatalog.findFirst({ where: { id: propertyTypeId, isActive: true }, select: { code: true } });
     if (!propertyType || !isPropertyTypeCode(propertyType.code)) {
-      throw new BadRequestException("Property type catalog entry does not exist.");
+      throw new BadRequestException("El tipo de propiedad indicado no existe.");
     }
 
     return { code: propertyType.code };
@@ -236,7 +236,7 @@ export class PropertiesService {
 
     const serviceTypes = await this.prisma.serviceType.findMany({ where: { id: { in: uniqueServiceTypeIds }, isActive: true }, select: { id: true } });
     if (serviceTypes.length !== uniqueServiceTypeIds.length) {
-      throw new BadRequestException("Every service type must exist in the global catalog.");
+      throw new BadRequestException("Todos los servicios indicados deben existir en el catálogo global.");
     }
   }
 }
@@ -252,7 +252,7 @@ function isPropertyTypeCode(code: string): code is PropertyTypeCode {
 function assertOwnershipTotals(owners: PropertyOwnerParticipationDto[]): void {
   const total = owners.reduce((sum, owner) => sum + owner.ownershipShareBps, 0);
   if (owners.length === 0 || total !== 10000) {
-    throw new BadRequestException("Ownership participation must total 100%.");
+    throw new BadRequestException("La participación de los propietarios debe sumar 100%.");
   }
 }
 
