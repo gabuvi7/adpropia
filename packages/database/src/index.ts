@@ -4,6 +4,9 @@ export { PrismaClient };
 export type {
   CashMovement,
   CashMovementType,
+  ContractFinalizationReason,
+  ContractParticipant,
+  ContractProperty,
   Currency,
   Document,
   DocumentType,
