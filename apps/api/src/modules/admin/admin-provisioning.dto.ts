@@ -1,20 +1,21 @@
 import { z } from "zod";
 
+const requiredMessage = (required: string, invalidType: string) => (issue: { input: unknown }) =>
+  issue.input === undefined ? required : invalidType;
+
 const requiredId = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatorio.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatorio.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatorio.`);
 
 const auth0Id = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatorio.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatorio.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatorio.`);
 
-const tenantRoleSchema = z.enum(["OWNER", "ADMIN", "OPERATOR", "READONLY"], {
-  errorMap: () => ({ message: "El rol no es válido." })
-});
+const tenantRoleSchema = z.enum(["OWNER", "ADMIN", "OPERATOR", "READONLY"], { error: "El rol no es válido." });
 
 export const linkTenantAuth0OrgSchema = z.object({
   auth0OrgId: auth0Id("El ID de organización de Auth0")

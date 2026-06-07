@@ -1,34 +1,31 @@
 import { z } from "zod";
 
+const requiredMessage = (required: string, invalidType: string) => (issue: { input: unknown }) =>
+  issue.input === undefined ? required : invalidType;
+
 const requiredText = (field: string) =>
   z
-    .string({ required_error: `El campo ${field} es obligatorio.`, invalid_type_error: `El campo ${field} debe ser texto.` })
+    .string({ error: requiredMessage(`El campo ${field} es obligatorio.`, `El campo ${field} debe ser texto.`) })
     .trim()
     .min(1, `El campo ${field} es obligatorio.`);
 
-const optionalText = (message: string) => z.string({ invalid_type_error: message }).trim().min(1, message).optional();
-const optionalRecord = (message: string) =>
-  z
-    .unknown()
-    .optional()
-    .refine((value) => value === undefined || (typeof value === "object" && value !== null && !Array.isArray(value)), message) as z.ZodType<
-    Record<string, unknown> | undefined
-  >;
+const optionalText = (message: string) => z.string({ error: message }).trim().min(1, message).optional();
+const optionalRecord = (message: string) => z.record(z.string(), z.unknown(), { error: message }).optional();
 
 export const tenantSettingsSchema = z.object(
   {
     commercialName: requiredText("nombre comercial"),
-    logoUrl: z.string({ invalid_type_error: "La URL del logo debe ser texto." }).trim().url("La URL del logo no es válida.").optional(),
+    logoUrl: z.string({ error: "La URL del logo debe ser texto." }).trim().url("La URL del logo no es válida.").optional(),
     primaryColor: optionalText("El color principal no puede estar vacío."),
-    defaultCurrency: z.enum(["ARS", "USD"], { errorMap: () => ({ message: "La moneda predeterminada no es válida." }) }).default("ARS"),
+    defaultCurrency: z.enum(["ARS", "USD"], { error: "La moneda predeterminada no es válida." }).default("ARS"),
     defaultCommissionBps: z
-      .number({ invalid_type_error: "La comisión debe ser un número." })
+      .number({ error: "La comisión debe ser un número." })
       .int("La comisión debe ser un número entero.")
       .min(0, "La comisión no puede ser negativa.")
       .default(0),
     operationalParameters: optionalRecord("Los parámetros operativos no son válidos.")
   },
-  { required_error: "La configuración de la inmobiliaria es obligatoria.", invalid_type_error: "La configuración enviada no es válida." }
+  { error: requiredMessage("La configuración de la inmobiliaria es obligatoria.", "La configuración enviada no es válida.") }
 );
 
 export const createTenantSchema = z.object(
@@ -38,7 +35,7 @@ export const createTenantSchema = z.object(
     customDomain: optionalText("El dominio personalizado no puede estar vacío."),
     settings: tenantSettingsSchema
   },
-  { required_error: "Los datos de la inmobiliaria son obligatorios.", invalid_type_error: "Los datos de la inmobiliaria no son válidos." }
+  { error: requiredMessage("Los datos de la inmobiliaria son obligatorios.", "Los datos de la inmobiliaria no son válidos.") }
 );
 
 export type CreateTenantDto = z.infer<typeof createTenantSchema>;

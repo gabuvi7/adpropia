@@ -1,26 +1,22 @@
 import { z } from "zod";
 
-const optionalText = (message: string) => z.string({ invalid_type_error: message }).trim().min(1, message).optional();
-const optionalRecord = (message: string) =>
-  z
-    .unknown()
-    .optional()
-    .refine((value) => value === undefined || (typeof value === "object" && value !== null && !Array.isArray(value)), message) as z.ZodType<
-    Record<string, unknown> | undefined
-  >;
+const requiredMessage = (required: string, invalidType: string) => (issue: { input: unknown }) =>
+  issue.input === undefined ? required : invalidType;
+const optionalText = (message: string) => z.string({ error: message }).trim().min(1, message).optional();
+const optionalRecord = (message: string) => z.record(z.string(), z.unknown(), { error: message }).optional();
 
 export const createRenterSchema = z.object(
   {
     displayName: z
-      .string({ required_error: "El nombre visible es obligatorio.", invalid_type_error: "El nombre visible debe ser texto." })
+      .string({ error: requiredMessage("El nombre visible es obligatorio.", "El nombre visible debe ser texto.") })
       .trim()
       .min(1, "El nombre visible es obligatorio."),
-    email: z.string({ invalid_type_error: "El email debe ser texto." }).trim().email("El email no es válido.").optional(),
+    email: z.string({ error: "El email debe ser texto." }).trim().email("El email no es válido.").optional(),
     phone: optionalText("El teléfono no puede estar vacío."),
     identityNumber: optionalText("El documento no puede estar vacío."),
     guaranteeInfo: optionalRecord("La información de garantía no es válida.")
   },
-  { required_error: "Los datos del inquilino son obligatorios.", invalid_type_error: "Los datos del inquilino no son válidos." }
+  { error: requiredMessage("Los datos del inquilino son obligatorios.", "Los datos del inquilino no son válidos.") }
 );
 
 export const updateRenterSchema = createRenterSchema.partial().refine((data) => Object.keys(data).length > 0, {

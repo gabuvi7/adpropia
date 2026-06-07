@@ -1,5 +1,6 @@
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import type { TenantRole } from "@adpropia/shared";
+import { isTenantRole } from "../../common/auth/auth-role";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { RequestContextService } from "../../common/request-context/request-context.service";
 
@@ -30,6 +31,10 @@ export class AuthService {
     if (!tenant) {
       this.logger.warn({ event: "bootstrap_tenant_not_found", tenantId: ctx.tenantId });
       throw new UnauthorizedException("Inmobiliaria no encontrada.");
+    }
+
+    if (!isTenantRole(ctx.role)) {
+      throw new UnauthorizedException("Tenant bootstrap requires tenant membership role.");
     }
 
     return {

@@ -6,25 +6,24 @@ import { z } from "zod";
 // importar desde allí y borrar estas copias. Decisión: NO refactorizar acá para
 // no introducir cambios cruzados que rompan tests de otros módulos en este batch.
 
-const currencySchema = z.enum(["ARS", "USD"], { errorMap: () => ({ message: "La moneda no es válida." }) });
+const requiredMessage = (required: string, invalidType: string) => (issue: { input: unknown }) =>
+  issue.input === undefined ? required : invalidType;
 
-const liquidationStatusSchema = z.enum(["DRAFT", "ISSUED", "PAID", "VOIDED"], {
-  errorMap: () => ({ message: "El estado de la liquidación no es válido." })
-});
+const currencySchema = z.enum(["ARS", "USD"], { error: "La moneda no es válida." });
 
-const adjustmentSignSchema = z.enum(["CREDIT", "DEBIT"], {
-  errorMap: () => ({ message: "El signo del ajuste no es válido." })
-});
+const liquidationStatusSchema = z.enum(["DRAFT", "ISSUED", "PAID", "VOIDED"], { error: "El estado de la liquidación no es válido." });
+
+const adjustmentSignSchema = z.enum(["CREDIT", "DEBIT"], { error: "El signo del ajuste no es válido." });
 
 const requiredId = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatorio.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatorio.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatorio.`);
 
 const isoDateString = (label: string) =>
   z
-    .string({ required_error: `${label} es obligatoria.`, invalid_type_error: `${label} debe ser texto.` })
+    .string({ error: requiredMessage(`${label} es obligatoria.`, `${label} debe ser texto.`) })
     .trim()
     .min(1, `${label} es obligatoria.`)
     .refine((value) => !Number.isNaN(Date.parse(value)), `${label} debe ser una fecha ISO válida.`);
@@ -36,10 +35,10 @@ const positiveAmountSchema = (label: string) =>
   z
     .union([
       z
-        .string({ invalid_type_error: `${label} debe ser texto o número.` })
+        .string({ error: `${label} debe ser texto o número.` })
         .trim()
         .regex(/^\d+(\.\d{1,2})?$/, `${label} debe tener hasta dos decimales.`),
-      z.number({ invalid_type_error: `${label} debe ser texto o número.` }).finite(`${label} debe ser finito.`)
+      z.number({ error: `${label} debe ser texto o número.` }).finite(`${label} debe ser finito.`)
     ])
     .transform((value) => (typeof value === "number" ? value.toString() : value))
     .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), `${label} debe tener hasta dos decimales.`)
@@ -59,8 +58,7 @@ const periodFieldsSchema = z.object(
     currency: currencySchema
   },
   {
-    required_error: "Las fechas del período son obligatorias y deben tener formato ISO.",
-    invalid_type_error: "Los datos de la liquidación no son válidos."
+    error: requiredMessage("Las fechas del período son obligatorias y deben tener formato ISO.", "Los datos de la liquidación no son válidos.")
   }
 );
 
@@ -76,25 +74,25 @@ export const previewLiquidationSchema = periodFieldsSchema.refine(
 const manualAdjustmentInputSchema = z.object(
   {
     concept: z
-      .string({ required_error: "El concepto del ajuste es obligatorio.", invalid_type_error: "El concepto del ajuste debe ser texto." })
+      .string({ error: requiredMessage("El concepto del ajuste es obligatorio.", "El concepto del ajuste debe ser texto.") })
       .trim()
       .min(1, "El concepto del ajuste es obligatorio.")
       .max(200, "El concepto del ajuste no puede superar los 200 caracteres."),
     amount: positiveAmountSchema("El monto del ajuste"),
     sign: adjustmentSignSchema
   },
-  { required_error: "Los datos del ajuste son obligatorios.", invalid_type_error: "Los datos del ajuste no son válidos." }
+  { error: requiredMessage("Los datos del ajuste son obligatorios.", "Los datos del ajuste no son válidos.") }
 );
 
 export const createLiquidationSchema = periodFieldsSchema
   .extend({
     notes: z
-      .string({ invalid_type_error: "Las observaciones deben ser texto." })
+      .string({ error: "Las observaciones deben ser texto." })
       .trim()
       .max(2000, "Las observaciones no pueden superar los 2000 caracteres.")
       .optional(),
     manualAdjustments: z
-      .array(manualAdjustmentInputSchema, { invalid_type_error: "Los ajustes manuales deben ser una lista." })
+      .array(manualAdjustmentInputSchema, { error: "Los ajustes manuales deben ser una lista." })
       .optional()
       .default([])
   })
@@ -131,7 +129,7 @@ export const listLiquidationsQuerySchema = z
 
 export const updateLiquidationDraftSchema = z.object({
   notes: z
-    .string({ invalid_type_error: "Las observaciones deben ser texto." })
+    .string({ error: "Las observaciones deben ser texto." })
     .max(2000, "Las observaciones no pueden superar los 2000 caracteres.")
     .optional()
 });
@@ -143,7 +141,7 @@ export const updateLiquidationDraftSchema = z.object({
 export const changeLiquidationStatusSchema = z.object({
   status: liquidationStatusSchema,
   voidReason: z
-    .string({ invalid_type_error: "El motivo de anulación debe ser texto." })
+    .string({ error: "El motivo de anulación debe ser texto." })
     .min(1, "Es necesario indicar un motivo de anulación.")
     .max(500, "El motivo de anulación no puede superar los 500 caracteres.")
     .optional()
@@ -155,7 +153,7 @@ export const changeLiquidationStatusSchema = z.object({
 
 export const addManualAdjustmentSchema = z.object({
   concept: z
-    .string({ required_error: "El concepto del ajuste es obligatorio.", invalid_type_error: "El concepto del ajuste debe ser texto." })
+    .string({ error: requiredMessage("El concepto del ajuste es obligatorio.", "El concepto del ajuste debe ser texto.") })
     .trim()
     .min(1, "El concepto del ajuste es obligatorio.")
     .max(200, "El concepto no puede superar los 200 caracteres."),

@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, Property } from "@adpropia/database";
+import { buildChangedFieldsMetadata } from "@adpropia/shared";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
+import { AuditService } from "../audit/audit.service";
 import type { CreatePropertyDto, UpdatePropertyDto } from "./properties.dto";
 
 export type PropertyRecord = Property;
@@ -10,16 +12,29 @@ export type PropertyRecord = Property;
 export class PropertiesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    private readonly audit: AuditService
   ) {}
 
   async createProperty(input: CreatePropertyDto): Promise<PropertyRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     await this.ensureOwnerBelongsToTenant(input.ownerId, tenantId);
 
     try {
-      return await this.prisma.property.create({
-        data: toPropertyCreateData(input, tenantId)
+      return await this.prisma.$transaction(async (tx) => {
+        const property = await tx.property.create({
+          data: toPropertyCreateData(input, tenantId)
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "property",
+          entityId: property.id,
+          action: "property.created",
+          metadata: { ownerId: input.ownerId }
+        });
+
+        return property;
       });
     } catch {
       throw new BadRequestException("No pudimos crear la propiedad. Revisá los datos enviados.");
@@ -45,7 +60,8 @@ export class PropertiesService {
   }
 
   async updateProperty(id: string, input: UpdatePropertyDto): Promise<PropertyRecord> {
-    const { tenantId } = this.contextService.get();
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
     const property = await this.findActiveProperty(id, tenantId);
 
     if (!property) {
@@ -57,9 +73,20 @@ export class PropertiesService {
     }
 
     try {
-      return await this.prisma.property.update({
-        where: { id_tenantId: { id, tenantId } },
-        data: toPropertyUpdateData(input)
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.property.update({
+          where: { id_tenantId: { id, tenantId } },
+          data: toPropertyUpdateData(input)
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "property",
+          entityId: id,
+          action: "property.updated",
+          metadata: buildChangedFieldsMetadata(input)
+        });
+
+        return updated;
       });
     } catch {
       throw new BadRequestException("No pudimos actualizar la propiedad. Revisá los datos enviados.");

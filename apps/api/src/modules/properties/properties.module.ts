@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../../common/prisma";
 import { RequestContextModule } from "../../common/request-context/request-context.module";
+import { AuditModule } from "../audit/audit.module";
 import { PropertiesController } from "./properties.controller";
 import { PropertiesService } from "./properties.service";
 
 @Module({
-  imports: [PrismaModule, RequestContextModule],
+  imports: [PrismaModule, RequestContextModule, AuditModule],
   controllers: [PropertiesController],
   providers: [PropertiesService],
   exports: [PropertiesService]

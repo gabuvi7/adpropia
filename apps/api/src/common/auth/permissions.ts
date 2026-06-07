@@ -1,24 +1,25 @@
-import type { TenantRole } from "@adpropia/shared";
+import type { AuthRole } from "./auth-role";
 
-const roleRank: Record<TenantRole, number> = {
+const roleRank: Record<AuthRole, number> = {
   READONLY: 0,
   OPERATOR: 1,
   ADMIN: 2,
-  OWNER: 3
+  OWNER: 3,
+  SUPERADMIN: 4
 };
 
-export function hasMinimumRole(currentRole: TenantRole, minimumRole: TenantRole): boolean {
+export function hasMinimumRole(currentRole: AuthRole, minimumRole: AuthRole): boolean {
   return roleRank[currentRole] >= roleRank[minimumRole];
 }
 
-export function assertMinimumRole(currentRole: TenantRole, minimumRole: TenantRole): void {
+export function assertMinimumRole(currentRole: AuthRole, minimumRole: AuthRole): void {
   if (!hasMinimumRole(currentRole, minimumRole)) {
     throw new Error(`Role ${currentRole} cannot perform action requiring ${minimumRole}`);
   }
 }
 
 /** Roles disponibles, ordenados de mayor privilegio a menor. */
-export const ALL_ROLES: readonly TenantRole[] = ["OWNER", "ADMIN", "OPERATOR", "READONLY"] as const;
+export const ALL_ROLES: readonly AuthRole[] = ["SUPERADMIN", "OWNER", "ADMIN", "OPERATOR", "READONLY"] as const;
 
 /** Permisos compartidos para módulos de entidades core (propietarios, inquilinos, propiedades, contratos). */
 export const CORE_ENTITY_PERMISSIONS = {
@@ -26,7 +27,7 @@ export const CORE_ENTITY_PERMISSIONS = {
   read: ["READONLY"] as const,
   create: ["OPERATOR"] as const,
   update: ["OPERATOR"] as const
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para el módulo de pagos. */
 export const PAYMENTS_PERMISSIONS = {
@@ -34,12 +35,12 @@ export const PAYMENTS_PERMISSIONS = {
   read: ["READONLY"] as const,
   balance: ["READONLY"] as const,
   create: ["OPERATOR"] as const
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para cash-movements. */
 export const CASH_MOVEMENTS_PERMISSIONS = {
   list: ["READONLY"] as const
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para reportes. */
 export const REPORTS_PERMISSIONS = {
@@ -47,19 +48,24 @@ export const REPORTS_PERMISSIONS = {
   upcomingDuePayments: ["READONLY"] as const,
   cashFlow: ["READONLY"] as const,
   outstandingBalances: ["READONLY"] as const
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para tenants (administración). */
 export const TENANTS_PERMISSIONS = {
   list: ["ADMIN"] as const,
   read: ["ADMIN"] as const,
   create: ["OWNER"] as const
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para admin/provisioning endpoints (OWNER-only). */
 export const ADMIN_PROVISIONING_PERMISSIONS = {
   manage: ["OWNER"] as const
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
+
+/** Permisos de solo SUPERADMIN para audit logs. */
+export const AUDIT_LOG_PERMISSIONS = {
+  read: ["SUPERADMIN"] as const
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /**
  * Matriz declarativa de permisos para Liquidaciones (US-025/US-026, REQ-013).
@@ -92,4 +98,4 @@ export const LIQUIDATIONS_PERMISSIONS = {
    */
   changeStatus: ["OWNER", "ADMIN", "OPERATOR"],
   manualAdjustments: ["OWNER", "ADMIN"]
-} as const satisfies Record<string, ReadonlyArray<TenantRole>>;
+} as const satisfies Record<string, ReadonlyArray<AuthRole>>;

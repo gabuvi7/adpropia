@@ -41,6 +41,7 @@ const protectedRoutes = [
   "contracts",
   "payments",
   "cash-movements",
+  "audit-logs",
   "reports",
   "liquidations",
   "auth"

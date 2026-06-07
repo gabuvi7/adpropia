@@ -1,5 +1,5 @@
 import { SetMetadata } from "@nestjs/common";
-import type { TenantRole } from "@adpropia/shared";
+import type { AuthRole } from "./auth-role";
 
 /**
  * Clave de metadata utilizada por `RolesGuard` para leer la lista de roles
@@ -20,5 +20,5 @@ export const REQUIRES_ROLE_KEY = "requires-role";
  *   @Patch(":id/status")
  *   async changeStatus() { ... }
  */
-export const RequiresRole = (...roles: TenantRole[]): MethodDecorator & ClassDecorator =>
+export const RequiresRole = (...roles: AuthRole[]): MethodDecorator & ClassDecorator =>
   SetMetadata(REQUIRES_ROLE_KEY, roles);

@@ -1,7 +1,11 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException, Logger } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../prisma/prisma.service";
-import { Auth0TenantResolver, type Auth0JwtClaims } from "./auth0-tenant-resolver";
+import {
+  Auth0TenantResolver,
+  AUTH0_PLATFORM_ROLES_CLAIM,
+  type Auth0JwtClaims
+} from "./auth0-tenant-resolver";
 
 function createPrismaMock(overrides?: Partial<PrismaService>) {
   const defaultMock = {
@@ -112,5 +116,95 @@ describe("Auth0TenantResolver", () => {
 
     const resolver = new Auth0TenantResolver(prisma);
     await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(UnauthorizedException);
+  });
+
+  describe("SUPERADMIN claim resolution", () => {
+    it("returns SUPERADMIN role when claims have superadmin flag", async () => {
+      const prisma = createPrismaMock();
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
+      vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue(mockMembership as never);
+      const resolver = new Auth0TenantResolver(prisma);
+
+      const result = await resolver.resolve({
+        sub: "auth0|user_xyz",
+        org_id: "org_abc123",
+        "https://adpropia.app/superadmin": true
+      });
+
+      expect(result.role).toBe("SUPERADMIN");
+      expect(result.tenantId).toBe("tenant-1");
+      expect(result.userId).toBe("user-1");
+    });
+
+    it("returns SUPERADMIN role when platform roles claim contains SUPERADMIN", async () => {
+      const prisma = createPrismaMock();
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
+      const resolver = new Auth0TenantResolver(prisma);
+
+      const result = await resolver.resolve({
+        sub: "auth0|user_xyz",
+        org_id: "org_abc123",
+        [AUTH0_PLATFORM_ROLES_CLAIM]: ["SUPPORT", "SUPERADMIN"]
+      });
+
+      expect(result).toEqual({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        role: "SUPERADMIN"
+      });
+      expect(prisma.tenantUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("resolves platform context when platform roles SUPERADMIN claim has no org_id", async () => {
+      const prisma = createPrismaMock();
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
+      const resolver = new Auth0TenantResolver(prisma);
+
+      const result = await resolver.resolve({
+        sub: "auth0|user_xyz",
+        [AUTH0_PLATFORM_ROLES_CLAIM]: ["SUPERADMIN"]
+      });
+
+      expect(result).toEqual({
+        tenantId: "platform",
+        userId: "user-1",
+        role: "SUPERADMIN"
+      });
+      expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
+      expect(prisma.tenantUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("falls through to membership role when superadmin flag is false", async () => {
+      const prisma = createPrismaMock();
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
+      vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue(mockMembership as never);
+      const resolver = new Auth0TenantResolver(prisma);
+
+      const result = await resolver.resolve({
+        sub: "auth0|user_xyz",
+        org_id: "org_abc123",
+        "https://adpropia.app/superadmin": false
+      });
+
+      expect(result.role).toBe("ADMIN");
+    });
+
+    it("falls through to membership role when superadmin flag is absent", async () => {
+      const prisma = createPrismaMock();
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
+      vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue(mockMembership as never);
+      const resolver = new Auth0TenantResolver(prisma);
+
+      const result = await resolver.resolve({
+        sub: "auth0|user_xyz",
+        org_id: "org_abc123"
+      });
+
+      expect(result.role).toBe("ADMIN");
+    });
   });
 });
