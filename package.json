@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "AdPropIA — SaaS multi-tenant real estate management platform.",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@11.5.2",
   "scripts": {
     "dev": "pnpm --parallel --filter @adpropia/api --filter @adpropia/web dev",
     "lint": "pnpm -r lint",
