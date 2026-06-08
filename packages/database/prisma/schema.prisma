@@ -158,6 +158,7 @@ model Persona {
   tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   fisica   PersonaFisica?
   juridica PersonaJuridica?
+  ownedProperties PropertyOwner[]
 
   @@unique([id, tenantId])
   @@index([tenantId])
@@ -331,10 +332,12 @@ model Renter {
 model Property {
   id            String         @id @default(cuid())
   tenantId      String
-  ownerId       String
+  ownerId       String?
+  propertyTypeId String?
   type          PropertyType
   status        PropertyStatus @default(AVAILABLE)
   addressLine   String
+  buildingName  String?
   city          String?
   province      String?
   postalCode    String?
@@ -344,14 +347,85 @@ model Property {
   updatedAt     DateTime       @updatedAt
 
   tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner     Owner            @relation(fields: [ownerId, tenantId], references: [id, tenantId])
+  owner     Owner?           @relation(fields: [ownerId, tenantId], references: [id, tenantId])
+  propertyType PropertyTypeCatalog? @relation(fields: [propertyTypeId], references: [id])
+  owners    PropertyOwner[]
+  services  PropertyService[]
   contracts RentalContract[]
 
   @@unique([id, tenantId])
   @@index([tenantId])
   @@index([tenantId, ownerId])
+  @@index([propertyTypeId])
   @@index([tenantId, status])
   @@map("properties")
+}
+
+model PropertyTypeCatalog {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  properties Property[]
+
+  @@map("property_type_catalogs")
+}
+
+model ServiceType {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyServices PropertyService[]
+
+  @@map("service_types")
+}
+
+model PropertyOwner {
+  id               String   @id @default(cuid())
+  tenantId         String
+  propertyId       String
+  personaId        String
+  /// Ownership share in basis points; 100% = 10_000 bps.
+  ownershipShareBps Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  persona  Persona  @relation(fields: [personaId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, propertyId, personaId])
+  @@index([tenantId])
+  @@index([tenantId, propertyId])
+  @@index([tenantId, personaId])
+  @@map("property_owners")
+}
+
+model PropertyService {
+  id             String   @id @default(cuid())
+  tenantId       String
+  propertyId     String
+  serviceTypeId  String
+  accountNumber  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property     Property     @relation(fields: [propertyId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  serviceType  ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, propertyId, serviceTypeId])
+  @@index([tenantId])
+  @@index([tenantId, propertyId])
+  @@index([serviceTypeId])
+  @@map("property_services")
 }
 
 model RentalContract {
