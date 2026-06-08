@@ -131,6 +131,11 @@ enum TenantBalanceMovementType {
   DEBT
 }
 
+enum ContractAdjustmentState {
+  PENDING_RECONCILIATION
+  RECONCILED
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   auth0OrgId   String?      @unique
@@ -159,6 +164,7 @@ model Tenant {
   rentPeriods                  RentPeriod[]
   rentPayments                 RentPayment[]
   tenantBalanceMovements       TenantBalanceMovement[]
+  contractAdjustments          ContractAdjustment[]
   indexValues                  CustomIndexValue[]
   payments                     Payment[]
   cashMovements                CashMovement[]
@@ -513,6 +519,7 @@ model RentalContract {
   guarantees       Guarantee[]
   depositPact      DepositPact?
   rentPeriods      RentPeriod[]
+  contractAdjustments ContractAdjustment[]
   payments         Payment[]
 
   @@unique([id, tenantId])
@@ -714,6 +721,7 @@ model RentPeriod {
   tenantPersona    Persona?                @relation(fields: [tenantPersonaId, tenantId], references: [id, tenantId], onDelete: Restrict)
   payments         RentPayment[]
   balanceMovements TenantBalanceMovement[]
+  contractAdjustments ContractAdjustment[]
 
   @@unique([id, tenantId])
   @@unique([tenantId, contractId, periodStart])
@@ -791,20 +799,60 @@ model CustomIndexValue {
   periodDate      DateTime
   value           Decimal  @db.Decimal(18, 6)
   isManual        Boolean  @default(true)
+  source          String?
+  publishedAt     DateTime?
+  idempotencyKey  String?
   uploadedById    String?
   metadata        Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  economicIndex EconomicIndex @relation(fields: [economicIndexId], references: [id])
-  uploadedBy    User?         @relation(fields: [uploadedById], references: [id])
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  economicIndex       EconomicIndex        @relation(fields: [economicIndexId], references: [id])
+  uploadedBy          User?                @relation(fields: [uploadedById], references: [id])
+  contractAdjustments ContractAdjustment[]
 
   @@unique([id, tenantId])
   @@unique([tenantId, economicIndexId, periodDate])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId])
   @@index([economicIndexId])
+  @@index([source])
   @@map("custom_index_values")
+}
+
+model ContractAdjustment {
+  id                   String                  @id @default(cuid())
+  tenantId             String
+  contractId           String
+  rentPeriodId         String
+  economicIndexValueId String
+  source               String
+  type                 EconomicIndexType
+  frequencyMonths      Int?
+  state                ContractAdjustmentState @default(PENDING_RECONCILIATION)
+  estimatedAmount      Decimal                 @db.Decimal(14, 2)
+  estimatedIndexValue  Decimal?                @db.Decimal(18, 6)
+  estimatedIndexSource String?
+  realIndexValue       Decimal                 @db.Decimal(18, 6)
+  realAmount           Decimal?                @db.Decimal(14, 2)
+  differenceAmount     Decimal?                @db.Decimal(14, 2)
+  reconciledAt         DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contract           RentalContract   @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  rentPeriod         RentPeriod       @relation(fields: [rentPeriodId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  economicIndexValue CustomIndexValue @relation(fields: [economicIndexValueId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, rentPeriodId, economicIndexValueId])
+  @@index([tenantId])
+  @@index([tenantId, contractId])
+  @@index([tenantId, rentPeriodId])
+  @@index([tenantId, state])
+  @@map("contract_adjustments")
 }
 
 model Payment {
