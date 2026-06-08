@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -26,7 +26,6 @@ import { TenantsController } from "../../modules/tenants/tenants.controller";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const apiRoot = resolve(currentDir, "../../..");
-const workspaceRoot = resolve(apiRoot, "../..");
 
 describe("Module wiring", () => {
   it("AppModule declares APP_GUARD in its providers", () => {
@@ -91,11 +90,14 @@ describe("Module wiring", () => {
     expect(deprecatedLegacyFiles.filter((filePath) => existsSync(resolve(apiRoot, filePath)))).toEqual([]);
   });
 
-  it("keeps destructive legacy owner/renter database removal behind a migration-safety checkpoint", () => {
-    const prismaSchema = readFileSync(resolve(workspaceRoot, "packages/database/prisma/schema.prisma"), "utf8");
+  it("keeps destructive legacy owner/renter database removal outside the API cleanup boundary", () => {
+    const deletedApiFiles = [
+      "src/modules/owners/owners.module.ts",
+      "src/modules/renters/renters.module.ts"
+    ];
 
-    expect(prismaSchema).toContain("model Owner");
-    expect(prismaSchema).toContain("model Renter");
+    expect(deletedApiFiles.some((filePath) => existsSync(resolve(apiRoot, filePath)))).toBe(false);
+    expect(appModules.map((moduleRef) => moduleRef.name)).not.toEqual(expect.arrayContaining(["OwnersModule", "RentersModule"]));
   });
 });
 
