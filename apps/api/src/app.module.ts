@@ -10,10 +10,8 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { ContractsModule } from "./modules/contracts/contracts.module";
 import { LiquidationsModule } from "./modules/liquidations/liquidations.module";
-import { OwnersModule } from "./modules/owners/owners.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PropertiesModule } from "./modules/properties/properties.module";
-import { RentersModule } from "./modules/renters/renters.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 import { AuthModule } from "./modules/auth/auth.module";
@@ -21,8 +19,6 @@ import { AuthModule } from "./modules/auth/auth.module";
 export const appModules = [
   AdminModule,
   TenantsModule,
-  OwnersModule,
-  RentersModule,
   PropertiesModule,
   ContractsModule,
   PaymentsModule,
@@ -32,11 +28,9 @@ export const appModules = [
   AuthModule
 ] as const;
 
-const protectedRoutes = [
+export const protectedRoutes = [
   "admin",
   "tenants",
-  "owners",
-  "renters",
   "properties",
   "contracts",
   "payments",

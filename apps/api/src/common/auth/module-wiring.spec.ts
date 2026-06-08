@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { describe, expect, it } from "vitest";
-import { AppModule } from "../../app.module";
+import { AppModule, appModules, protectedRoutes } from "../../app.module";
 import { LiquidationsModule } from "../../modules/liquidations/liquidations.module";
 import {
   ADMIN_PROVISIONING_PERMISSIONS,
@@ -15,8 +15,6 @@ import { REQUIRES_ROLE_KEY } from "./roles.decorator";
 import { AdminProvisioningController } from "../../modules/admin/admin-provisioning.controller";
 import { AuditController } from "../../modules/audit/audit.controller";
 import { ContractsController } from "../../modules/contracts/contracts.controller";
-import { OwnersController } from "../../modules/owners/owners.controller";
-import { RentersController } from "../../modules/renters/renters.controller";
 import { PropertiesController } from "../../modules/properties/properties.controller";
 import { PaymentsController } from "../../modules/payments/payments.controller";
 import { CashMovementsController } from "../../modules/payments/cash-movements.controller";
@@ -46,6 +44,27 @@ describe("Module wiring", () => {
         (p as Record<string, unknown>).provide === "APP_GUARD"
     );
     expect(appGuardProvider).toBeUndefined();
+  });
+
+  it("does not expose legacy owner/renter rental API modules as public application modules", () => {
+    expect(appModules.map((moduleRef) => moduleRef.name)).not.toEqual(expect.arrayContaining(["OwnersModule", "RentersModule"]));
+  });
+
+  it("keeps active rental modules wired while excluding legacy owner/renter modules from AppModule imports", () => {
+    const imports: unknown[] = Reflect.getMetadata("imports", AppModule) ?? [];
+    const importNames = imports.map((moduleRef) => (typeof moduleRef === "function" ? moduleRef.name : String(moduleRef)));
+
+    expect(importNames).toEqual(expect.arrayContaining(["PropertiesModule", "ContractsModule", "PaymentsModule"]));
+    expect(importNames).not.toEqual(expect.arrayContaining(["OwnersModule", "RentersModule"]));
+  });
+
+  it("does not protect legacy owner/renter routes because those public facades are removed", () => {
+    expect([...protectedRoutes]).not.toEqual(expect.arrayContaining(["owners", "renters"]));
+  });
+
+  it("keeps active rental routes protected while excluding legacy owner/renter route names", () => {
+    expect([...protectedRoutes]).toEqual(expect.arrayContaining(["properties", "contracts", "payments"]));
+    expect([...protectedRoutes]).not.toEqual(expect.arrayContaining(["owners", "renters"]));
   });
 });
 
@@ -79,50 +98,6 @@ describe("@RequiresRole metadata inventory", () => {
     it("changeStatus → [ADMIN]", () => {
       expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ContractsController.prototype.changeStatus))
         .toEqual(["ADMIN"]);
-    });
-  });
-
-  describe("OwnersController", () => {
-    it("create → CORE_ENTITY_PERMISSIONS.create", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.create))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.create]);
-    });
-
-    it("list → CORE_ENTITY_PERMISSIONS.list", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.list))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
-    });
-
-    it("getById → CORE_ENTITY_PERMISSIONS.read", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.getById))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.read]);
-    });
-
-    it("update → CORE_ENTITY_PERMISSIONS.update", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, OwnersController.prototype.update))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.update]);
-    });
-  });
-
-  describe("RentersController", () => {
-    it("create → CORE_ENTITY_PERMISSIONS.create", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.create))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.create]);
-    });
-
-    it("list → CORE_ENTITY_PERMISSIONS.list", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.list))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.list]);
-    });
-
-    it("getById → CORE_ENTITY_PERMISSIONS.read", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.getById))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.read]);
-    });
-
-    it("update → CORE_ENTITY_PERMISSIONS.update", () => {
-      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, RentersController.prototype.update))
-        .toEqual([...CORE_ENTITY_PERMISSIONS.update]);
     });
   });
 

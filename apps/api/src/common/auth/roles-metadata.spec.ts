@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
 import { CORE_ENTITY_PERMISSIONS, PAYMENTS_PERMISSIONS, CASH_MOVEMENTS_PERMISSIONS, REPORTS_PERMISSIONS, TENANTS_PERMISSIONS } from "./permissions";
 import { ContractsController } from "../../modules/contracts/contracts.controller";
-import { OwnersController } from "../../modules/owners/owners.controller";
-import { RentersController } from "../../modules/renters/renters.controller";
 import { PropertiesController } from "../../modules/properties/properties.controller";
 import { PaymentsController } from "../../modules/payments/payments.controller";
 import { CashMovementsController } from "../../modules/payments/cash-movements.controller";
@@ -37,36 +35,6 @@ describe("ContractsController role metadata", () => {
   });
   it("PATCH /contracts/:id/status tiene @RequiresRole(ADMIN)", () => {
     expect(getMethodMetadata(ContractsController, "changeStatus")).toEqual(["ADMIN"]);
-  });
-});
-
-describe("OwnersController role metadata", () => {
-  it("POST /owners tiene @RequiresRole(OPERATOR)", () => {
-    expect(getMethodMetadata(OwnersController, "create")).toEqual(["OPERATOR"]);
-  });
-  it("GET /owners tiene @RequiresRole(READONLY)", () => {
-    expect(getMethodMetadata(OwnersController, "list")).toEqual(["READONLY"]);
-  });
-  it("GET /owners/:id tiene @RequiresRole(READONLY)", () => {
-    expect(getMethodMetadata(OwnersController, "getById")).toEqual(["READONLY"]);
-  });
-  it("PATCH /owners/:id tiene @RequiresRole(OPERATOR)", () => {
-    expect(getMethodMetadata(OwnersController, "update")).toEqual(["OPERATOR"]);
-  });
-});
-
-describe("RentersController role metadata", () => {
-  it("POST /renters tiene @RequiresRole(OPERATOR)", () => {
-    expect(getMethodMetadata(RentersController, "create")).toEqual(["OPERATOR"]);
-  });
-  it("GET /renters tiene @RequiresRole(READONLY)", () => {
-    expect(getMethodMetadata(RentersController, "list")).toEqual(["READONLY"]);
-  });
-  it("GET /renters/:id tiene @RequiresRole(READONLY)", () => {
-    expect(getMethodMetadata(RentersController, "getById")).toEqual(["READONLY"]);
-  });
-  it("PATCH /renters/:id tiene @RequiresRole(OPERATOR)", () => {
-    expect(getMethodMetadata(RentersController, "update")).toEqual(["OPERATOR"]);
   });
 });
 
