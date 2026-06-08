@@ -28,6 +28,12 @@ function createPrismaMock() {
       findUnique: vi.fn(),
       update: vi.fn()
     },
+    guarantee: {
+      create: vi.fn()
+    },
+    depositPact: {
+      create: vi.fn()
+    },
     $transaction: vi.fn()
   } as unknown as PrismaService;
 }
@@ -306,5 +312,118 @@ describe("ContractsService", () => {
         finalizationReason: "OTHER"
       })
     ).rejects.toThrow("Tenés que indicar una descripción cuando el motivo de finalización es Otro.");
+  });
+
+  it("rejects incomplete property-backed guarantees with Spanish user-facing validation", async () => {
+    const service = new ContractsService(createPrismaMock(), createContextMock("tenant-a"), createAuditMock());
+
+    await expect(
+      service.registerContractGuarantee("contract-1", {
+        type: "PROPERTY_BACKED",
+        state: "ACTIVE",
+        propertyBacked: {
+          cadastralNomenclature: "Circ. 1 Sec. 2 Manz. 3 Parc. 4",
+          registrationNumber: "MAT-12345",
+          registrationLocality: "La Plata",
+          propertyAddress: "Calle 1 234",
+          propertyCity: "La Plata",
+          titleHolders: [{ fullName: "María García", taxId: "20-12345678-9", signsGuarantee: false }]
+        }
+      })
+    ).rejects.toThrow("La garantía propietaria debe tener al menos un titular firmante.");
+  });
+
+  it("registers multiple simultaneous contract-level guarantees with subtype details and holder signer data", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ id: "contract-1", tenantId: "tenant-a" } as never);
+    const tx = {
+      guarantee: {
+        create: vi.fn().mockResolvedValue({ id: "guarantee-1", tenantId: "tenant-a", contractId: "contract-1", type: "PROPERTY_BACKED" } as never)
+      }
+    };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.registerContractGuarantee("contract-1", {
+      type: "PROPERTY_BACKED",
+      state: "ACTIVE",
+      propertyBacked: {
+        cadastralNomenclature: "Circ. 1 Sec. 2 Manz. 3 Parc. 4",
+        registrationNumber: "MAT-12345",
+        registrationLocality: "La Plata",
+        propertyAddress: "Calle 1 234",
+        propertyCity: "La Plata",
+        titleHolders: [
+          { fullName: "María García", taxId: "20-12345678-9", signsGuarantee: true },
+          { fullName: "Juan García", taxId: "20-98765432-1", signsGuarantee: false }
+        ]
+      }
+    });
+
+    expect(tx.guarantee.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-a",
+        contractId: "contract-1",
+        type: "PROPERTY_BACKED",
+        state: "ACTIVE",
+        propertyBacked: expect.objectContaining({
+          create: expect.objectContaining({ registrationNumber: "MAT-12345", propertyCity: "La Plata" })
+        })
+      })
+    });
+    expect(tx.guarantee.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        propertyBacked: expect.objectContaining({
+          create: expect.objectContaining({
+            titleHolders: {
+              createMany: {
+                data: [
+                  { tenantId: "tenant-a", fullName: "María García", taxId: "20-12345678-9", signsGuarantee: true },
+                  { tenantId: "tenant-a", fullName: "Juan García", taxId: "20-98765432-1", signsGuarantee: false }
+                ]
+              }
+            }
+          })
+        })
+      })
+    });
+  });
+
+  it("keeps deposit pact modeling separate from guarantees and future cash movement/refund flows", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ id: "contract-1", tenantId: "tenant-a" } as never);
+    const tx = {
+      depositPact: {
+        create: vi.fn().mockResolvedValue({ id: "deposit-1", tenantId: "tenant-a", contractId: "contract-1" } as never)
+      }
+    };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.defineContractDeposit("contract-1", {
+      amount: "500000.00",
+      currency: "ARS",
+      receivedAt: "2026-05-01T00:00:00.000Z",
+      notes: "Equivalent to half a monthly rent."
+    });
+
+    expect(tx.depositPact.create).toHaveBeenCalledWith({
+      data: {
+        tenantId: "tenant-a",
+        contractId: "contract-1",
+        amount: "500000.00",
+        currency: "ARS",
+        receivedAt: new Date("2026-05-01T00:00:00.000Z"),
+        notes: "Equivalent to half a monthly rent.",
+        cashMovementId: null,
+        refundCashMovementId: null,
+        retentionCashMovementId: null
+      }
+    });
+    expect(prisma.guarantee.create).not.toHaveBeenCalled();
   });
 });

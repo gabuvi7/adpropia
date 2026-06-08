@@ -34,6 +34,57 @@ export interface FinalizeContractEarlyDto {
   finalizationDescription?: string;
 }
 
+export interface SalaryReceiptGuaranteeInput {
+  employerName: string;
+  employeeName: string;
+  employeeTaxId?: string;
+  monthlyIncome?: string;
+  employmentDate?: string;
+}
+
+export interface PropertyBackedTitleHolderInput {
+  fullName: string;
+  taxId?: string;
+  signsGuarantee: boolean;
+}
+
+export interface PropertyBackedGuaranteeInput {
+  cadastralNomenclature: string;
+  registrationNumber: string;
+  registrationLocality: string;
+  propertyAddress: string;
+  propertyCity?: string;
+  propertyProvince?: string;
+  titleHolders: PropertyBackedTitleHolderInput[];
+}
+
+export interface SuretyGuaranteeInput {
+  companyName: string;
+  policyNumber: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  coverageAmount?: string;
+}
+
+export interface RegisterContractGuaranteeDto {
+  type: "SALARY_RECEIPT" | "PROPERTY_BACKED" | "SURETY";
+  state?: "ACTIVE" | "RELEASED" | "EXPIRED";
+  startsAt?: string;
+  endsAt?: string;
+  notes?: string;
+  salaryReceipt?: SalaryReceiptGuaranteeInput;
+  propertyBacked?: PropertyBackedGuaranteeInput;
+  surety?: SuretyGuaranteeInput;
+}
+
+export interface DefineContractDepositDto {
+  amount: string;
+  currency: "ARS" | "USD";
+  receivedAt?: string;
+  notes?: string;
+}
+
 @Injectable()
 export class ContractsService {
   constructor(
@@ -237,6 +288,60 @@ export class ContractsService {
     }
   }
 
+  async registerContractGuarantee(contractId: string, input: RegisterContractGuaranteeDto): Promise<unknown> {
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
+    assertGuaranteeInput(input);
+
+    const contract = await this.findContract(contractId, tenantId);
+    if (!contract) {
+      throw new NotFoundException("No encontramos el contrato solicitado.");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const guarantee = await tx.guarantee.create({ data: toGuaranteeCreateData(input, contractId, tenantId) });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "contract_guarantee",
+          entityId: guarantee.id,
+          action: "contract.guarantee_registered",
+          metadata: { contractId, type: input.type, state: input.state ?? "ACTIVE" }
+        });
+
+        return guarantee;
+      });
+    } catch {
+      throw new BadRequestException("No pudimos registrar la garantía del contrato. Revisá los datos enviados.");
+    }
+  }
+
+  async defineContractDeposit(contractId: string, input: DefineContractDepositDto): Promise<unknown> {
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
+    const contract = await this.findContract(contractId, tenantId);
+    if (!contract) {
+      throw new NotFoundException("No encontramos el contrato solicitado.");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const deposit = await tx.depositPact.create({ data: toDepositPactCreateData(input, contractId, tenantId) });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "contract_deposit_pact",
+          entityId: deposit.id,
+          action: "contract.deposit_pact_defined",
+          metadata: { contractId, currency: input.currency }
+        });
+
+        return deposit;
+      });
+    } catch {
+      throw new BadRequestException("No pudimos registrar el depósito pactado del contrato. Revisá los datos enviados.");
+    }
+  }
+
   private findContract(id: string, tenantId = this.contextService.get().tenantId): Promise<ContractRecord | null> {
     return this.prisma.rentalContract.findUnique({ where: { id_tenantId: { id, tenantId } } });
   }
@@ -402,6 +507,130 @@ function toContractUpdateData(input: UpdateContractDto): Prisma.RentalContractUn
     ...(input.adjustmentIndexType !== undefined ? { adjustmentIndexType: input.adjustmentIndexType } : {}),
     ...(input.adjustmentPeriodMonths !== undefined ? { adjustmentPeriodMonths: input.adjustmentPeriodMonths } : {}),
     ...(input.nextAdjustmentAt !== undefined ? { nextAdjustmentAt: toDate(input.nextAdjustmentAt) } : {})
+  };
+}
+
+function assertGuaranteeInput(input: RegisterContractGuaranteeDto): void {
+  if (input.type === "SALARY_RECEIPT" && !input.salaryReceipt) {
+    throw new BadRequestException("Tenés que indicar los datos laborales para la garantía con recibo de sueldo.");
+  }
+
+  if (input.type === "SURETY" && !input.surety) {
+    throw new BadRequestException("Tenés que indicar los datos de la caución para esta garantía.");
+  }
+
+  if (input.type !== "PROPERTY_BACKED") {
+    return;
+  }
+
+  const propertyBacked = input.propertyBacked;
+  if (!propertyBacked) {
+    throw new BadRequestException("Tenés que indicar los datos del inmueble usado como garantía propietaria.");
+  }
+
+  const requiredFields = [
+    propertyBacked.cadastralNomenclature,
+    propertyBacked.registrationNumber,
+    propertyBacked.registrationLocality,
+    propertyBacked.propertyAddress
+  ];
+  if (requiredFields.some((field) => !field.trim())) {
+    throw new BadRequestException("La garantía propietaria está incompleta. Revisá nomenclatura, matrícula, localidad registral y domicilio.");
+  }
+
+  if (propertyBacked.titleHolders.length === 0) {
+    throw new BadRequestException("La garantía propietaria debe tener al menos un titular registral.");
+  }
+
+  if (!propertyBacked.titleHolders.some((holder) => holder.signsGuarantee)) {
+    throw new BadRequestException("La garantía propietaria debe tener al menos un titular firmante.");
+  }
+}
+
+function toGuaranteeCreateData(input: RegisterContractGuaranteeDto, contractId: string, tenantId: string): Prisma.GuaranteeCreateArgs["data"] {
+  const base = {
+    tenantId,
+    contractId,
+    type: input.type,
+    state: input.state ?? "ACTIVE",
+    ...(input.startsAt !== undefined ? { startsAt: toDate(input.startsAt) } : {}),
+    ...(input.endsAt !== undefined ? { endsAt: toDate(input.endsAt) } : {}),
+    notes: input.notes?.trim() ?? null
+  };
+
+  if (input.type === "SALARY_RECEIPT" && input.salaryReceipt) {
+    return {
+      ...base,
+      salaryReceipt: {
+        create: {
+          employerName: input.salaryReceipt.employerName,
+          employeeName: input.salaryReceipt.employeeName,
+          employeeTaxId: input.salaryReceipt.employeeTaxId ?? null,
+          monthlyIncome: input.salaryReceipt.monthlyIncome ?? null,
+          employmentDate: input.salaryReceipt.employmentDate !== undefined ? toDate(input.salaryReceipt.employmentDate) : null
+        }
+      }
+    } as unknown as Prisma.GuaranteeCreateArgs["data"];
+  }
+
+  if (input.type === "SURETY" && input.surety) {
+    return {
+      ...base,
+      surety: {
+        create: {
+          companyName: input.surety.companyName,
+          policyNumber: input.surety.policyNumber,
+          contactName: input.surety.contactName ?? null,
+          contactEmail: input.surety.contactEmail ?? null,
+          contactPhone: input.surety.contactPhone ?? null,
+          coverageAmount: input.surety.coverageAmount ?? null
+        }
+      }
+    } as unknown as Prisma.GuaranteeCreateArgs["data"];
+  }
+
+  const propertyBacked = input.propertyBacked;
+  if (!propertyBacked) {
+    throw new BadRequestException("Tenés que indicar los datos del inmueble usado como garantía propietaria.");
+  }
+
+  return {
+    ...base,
+    propertyBacked: {
+      create: {
+        tenantId,
+        cadastralNomenclature: propertyBacked.cadastralNomenclature,
+        registrationNumber: propertyBacked.registrationNumber,
+        registrationLocality: propertyBacked.registrationLocality,
+        propertyAddress: propertyBacked.propertyAddress,
+        propertyCity: propertyBacked.propertyCity ?? null,
+        propertyProvince: propertyBacked.propertyProvince ?? null,
+        titleHolders: {
+          createMany: {
+            data: propertyBacked.titleHolders.map((holder) => ({
+              tenantId,
+              fullName: holder.fullName,
+              taxId: holder.taxId ?? null,
+              signsGuarantee: holder.signsGuarantee
+            }))
+          }
+        }
+      }
+    }
+  } as unknown as Prisma.GuaranteeCreateArgs["data"];
+}
+
+function toDepositPactCreateData(input: DefineContractDepositDto, contractId: string, tenantId: string): Prisma.DepositPactUncheckedCreateInput {
+  return {
+    tenantId,
+    contractId,
+    amount: input.amount,
+    currency: input.currency,
+    receivedAt: input.receivedAt !== undefined ? toDate(input.receivedAt) : null,
+    notes: input.notes?.trim() ?? null,
+    cashMovementId: null,
+    refundCashMovementId: null,
+    retentionCashMovementId: null
   };
 }
 
