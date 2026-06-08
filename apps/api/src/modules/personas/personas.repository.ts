@@ -45,6 +45,15 @@ export class PersonasRepository {
     });
   }
 
+  list(): Promise<PersonaWithSubtype[]> {
+    const { tenantId } = this.contextService.get();
+    return this.prisma.persona.findMany({
+      where: { tenantId, deletedAt: null },
+      include: personaSubtypeInclude,
+      orderBy: { displayName: "asc" }
+    });
+  }
+
   async assertBelongsToTenant(id: string): Promise<PersonaWithSubtype> {
     const persona = await this.findById(id);
 

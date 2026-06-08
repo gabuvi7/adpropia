@@ -7,6 +7,7 @@ import {
   changeLiquidationStatusSchema,
   createLiquidationSchema,
   listLiquidationsQuerySchema,
+  ownerSettlementInputsSchema,
   previewLiquidationSchema,
   updateLiquidationDraftSchema
 } from "./liquidations.dto";
@@ -29,6 +30,12 @@ export class LiquidationsController {
   @RequiresRole(...LIQUIDATIONS_PERMISSIONS.preview)
   preview(@Body() body: unknown) {
     return this.service.previewLiquidation(parseRequestBody(previewLiquidationSchema, body));
+  }
+
+  @Post("owner-settlement-inputs")
+  @RequiresRole(...LIQUIDATIONS_PERMISSIONS.preview)
+  computeOwnerSettlementInputs(@Body() body: unknown) {
+    return this.service.computeOwnerSettlementInputs(parseRequestBody(ownerSettlementInputsSchema, body));
   }
 
   @Post()
