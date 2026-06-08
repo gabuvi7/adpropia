@@ -10,10 +10,10 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { ContractsModule } from "./modules/contracts/contracts.module";
 import { LiquidationsModule } from "./modules/liquidations/liquidations.module";
-import { OwnersModule } from "./modules/owners/owners.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
+import { PersonasModule } from "./modules/personas/personas.module";
 import { PropertiesModule } from "./modules/properties/properties.module";
-import { RentersModule } from "./modules/renters/renters.module";
+import { IndicesModule } from "./modules/indices/indices.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 import { AuthModule } from "./modules/auth/auth.module";
@@ -21,26 +21,26 @@ import { AuthModule } from "./modules/auth/auth.module";
 export const appModules = [
   AdminModule,
   TenantsModule,
-  OwnersModule,
-  RentersModule,
+  PersonasModule,
   PropertiesModule,
   ContractsModule,
   PaymentsModule,
+  IndicesModule,
   LiquidationsModule,
   ReportsModule,
   AuditModule,
   AuthModule
 ] as const;
 
-const protectedRoutes = [
+export const protectedRoutes = [
   "admin",
   "tenants",
-  "owners",
-  "renters",
+  "personas",
   "properties",
   "contracts",
   "payments",
   "cash-movements",
+  "indices",
   "audit-logs",
   "reports",
   "liquidations",

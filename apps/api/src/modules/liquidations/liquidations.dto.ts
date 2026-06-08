@@ -101,6 +101,15 @@ export const createLiquidationSchema = periodFieldsSchema
     path: ["periodEnd"]
   });
 
+export const ownerSettlementInputsSchema = z.object(
+  {
+    contractId: requiredId("El contrato"),
+    periodStart: optionalIsoDateString("La fecha de inicio del período"),
+    periodEnd: optionalIsoDateString("La fecha de fin del período")
+  },
+  { error: requiredMessage("Los datos del contrato son obligatorios.", "Los datos para calcular la liquidación no son válidos.") }
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // listLiquidationsQuerySchema — GET /liquidations query
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,6 +176,7 @@ export const addManualAdjustmentSchema = z.object({
 
 export type PreviewLiquidationDto = z.infer<typeof previewLiquidationSchema>;
 export type CreateLiquidationDto = z.infer<typeof createLiquidationSchema>;
+export type OwnerSettlementInputsDto = z.infer<typeof ownerSettlementInputsSchema>;
 export type ListLiquidationsQueryDto = z.infer<typeof listLiquidationsQuerySchema>;
 export type ManualAdjustmentInputDto = z.infer<typeof manualAdjustmentInputSchema>;
 export type UpdateLiquidationDraftDto = z.infer<typeof updateLiquidationDraftSchema>;

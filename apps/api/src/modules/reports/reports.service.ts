@@ -135,15 +135,21 @@ export class ReportsService {
         email: renter.email,
         phone: renter.phone
       },
-      contracts: contracts.map((contract) => ({
-        id: contract.id,
-        propertyId: contract.propertyId,
-        status: contract.status,
-        startsAt: contract.startsAt,
-        endsAt: contract.endsAt,
-        currency: contract.currency,
-        rentAmount: contract.rentAmount.toString()
-      })),
+      contracts: contracts.flatMap((contract) =>
+        contract.propertyId === null
+          ? []
+          : [
+              {
+                id: contract.id,
+                propertyId: contract.propertyId,
+                status: contract.status,
+                startsAt: contract.startsAt,
+                endsAt: contract.endsAt,
+                currency: contract.currency,
+                rentAmount: contract.rentAmount.toString()
+              }
+            ]
+      ),
       payments,
       totals: {
         currency: dominantCurrency,
@@ -285,6 +291,10 @@ export class ReportsService {
     const items: OutstandingBalanceItem[] = [];
 
     for (const contract of contracts) {
+      if (contract.propertyId === null || contract.renterId === null || contract.ownerId === null || !contract.renter || !contract.property) {
+        continue;
+      }
+
       let pendingDebtCents = 0n;
       let overdueCount = 0;
       let nextDueAt: Date | null = null;
@@ -384,4 +394,3 @@ function aggregatePaymentTotals(
     creditBalance: fromCents(creditBalanceCents)
   };
 }
-

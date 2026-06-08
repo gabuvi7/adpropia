@@ -80,6 +80,28 @@ export const balanceQuerySchema = z.object(
   { error: requiredMessage("El contrato es obligatorio.", "El contrato no es válido.") }
 );
 
+export const recordRentPaymentSchema = z.object(
+  {
+    rentPeriodId: requiredId("El período de alquiler"),
+    amount: positiveAmountSchema("El monto pagado"),
+    currency: currencySchema,
+    paidAt: isoDateString("La fecha de pago"),
+    notes: z.string({ error: "Las notas deben ser texto." }).trim().max(500, "Las notas no pueden superar los 500 caracteres.").optional()
+  },
+  { error: requiredMessage("Los datos del pago de alquiler son obligatorios.", "Los datos del pago de alquiler no son válidos.") }
+);
+
+export const recordTenantBalanceMovementSchema = z.object(
+  {
+    rentPeriodId: requiredId("El período de alquiler"),
+    paidAmount: nonNegativeAmountSchema("El monto pagado"),
+    realAmount: positiveAmountSchema("El monto real"),
+    currency: currencySchema,
+    reason: z.string({ error: "El motivo debe ser texto." }).trim().max(500, "El motivo no puede superar los 500 caracteres.").optional()
+  },
+  { error: requiredMessage("Los datos del saldo del inquilino son obligatorios.", "Los datos del saldo del inquilino no son válidos.") }
+);
+
 export const listCashMovementsQuerySchema = z
   .object({
     from: optionalIsoDateString("La fecha desde"),
@@ -99,6 +121,8 @@ export type CreatePaymentDto = z.infer<typeof createPaymentSchema>;
 export type ListPaymentsQueryDto = z.infer<typeof listPaymentsQuerySchema>;
 export type BalanceQueryDto = z.infer<typeof balanceQuerySchema>;
 export type ListCashMovementsQueryDto = z.infer<typeof listCashMovementsQuerySchema>;
+export type RecordRentPaymentRequestDto = z.infer<typeof recordRentPaymentSchema>;
+export type RecordTenantBalanceMovementRequestDto = z.infer<typeof recordTenantBalanceMovementSchema>;
 
 export class CreatePaymentRequest {
   contractId!: string;

@@ -3,6 +3,8 @@ node_modules/
 .next/
 dist/
 coverage/
+reports/mutation/
+.stryker-tmp/
 .turbo/
 
 # Environment files

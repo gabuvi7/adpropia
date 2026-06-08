@@ -8,12 +8,16 @@ import { PaymentsService } from "./payments.service";
 type TxClient = {
   payment: { create: ReturnType<typeof vi.fn> };
   cashMovement: { create: ReturnType<typeof vi.fn> };
+  rentPayment: { create: ReturnType<typeof vi.fn> };
+  tenantBalanceMovement: { create: ReturnType<typeof vi.fn> };
 };
 
 function createPrismaMock() {
   const tx: TxClient = {
     payment: { create: vi.fn() },
-    cashMovement: { create: vi.fn() }
+    cashMovement: { create: vi.fn() },
+    rentPayment: { create: vi.fn() },
+    tenantBalanceMovement: { create: vi.fn() }
   };
 
   const prisma = {
@@ -22,6 +26,9 @@ function createPrismaMock() {
     },
     payment: {
       findMany: vi.fn(),
+      findUnique: vi.fn()
+    },
+    rentPeriod: {
       findUnique: vi.fn()
     },
     cashMovement: {
@@ -174,6 +181,134 @@ describe("PaymentsService.createPayment", () => {
 
     expect(prisma.__tx.payment.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ status: "OVERPAID", remainingDebt: "0.00", creditBalance: "50000.00" })
+    });
+  });
+});
+
+describe("PaymentsService.recordRentPayment", () => {
+  it("records early estimated-period payments as ON_ACCOUNT rent payment events with a cash boundary link", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({
+      id: "period-1",
+      tenantId: "tenant-a",
+      contractId: "contract-1",
+      tenantPersonaId: "tenant-persona-1",
+      calculationState: "ESTIMATED",
+      currency: "ARS",
+      estimatedAmount: "100000.00",
+      realAmount: null
+    } as never);
+    prisma.__tx.rentPayment.create.mockResolvedValue({ id: "rent-payment-1", tenantId: "tenant-a", rentPeriodId: "period-1" });
+    prisma.__tx.cashMovement.create.mockResolvedValue({ id: "cash-movement-1", tenantId: "tenant-a" });
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.recordRentPayment({
+      rentPeriodId: "period-1",
+      amount: "100000.00",
+      currency: "ARS",
+      paidAt: "2026-05-05T12:00:00.000Z",
+      notes: "Paid before IPC publication."
+    });
+
+    expect(prisma.__tx.rentPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-a",
+        rentPeriodId: "period-1",
+        type: "ON_ACCOUNT",
+        amount: "100000.00",
+        currency: "ARS",
+        paidAt: new Date("2026-05-05T12:00:00.000Z"),
+        cashMovementId: null,
+        commissionMovementId: null,
+        notes: "Paid before IPC publication."
+      })
+    });
+    expect(prisma.__tx.cashMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-a",
+        type: "INCOME",
+        amount: "100000.00",
+        currency: "ARS",
+        sourceType: "RENT_PAYMENT",
+        sourceId: "rent-payment-1"
+      })
+    });
+  });
+
+  it("keeps final-period collection as FINAL rent payment event instead of a boolean paid flag", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({
+      id: "period-2",
+      tenantId: "tenant-a",
+      contractId: "contract-1",
+      tenantPersonaId: "tenant-persona-1",
+      calculationState: "RECONCILED",
+      currency: "ARS",
+      estimatedAmount: "100000.00",
+      realAmount: "112000.00"
+    } as never);
+    prisma.__tx.rentPayment.create.mockResolvedValue({ id: "rent-payment-2", tenantId: "tenant-a", rentPeriodId: "period-2" });
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.recordRentPayment({ rentPeriodId: "period-2", amount: "112000.00", currency: "ARS", paidAt: "2026-05-20T12:00:00.000Z" });
+
+    expect(prisma.__tx.rentPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ type: "FINAL", rentPeriodId: "period-2", amount: "112000.00" })
+    });
+    expect(prisma.__tx.rentPayment.create).not.toHaveBeenCalledWith({ data: expect.objectContaining({ paid: true }) });
+  });
+});
+
+describe("PaymentsService.recordTenantBalanceMovement", () => {
+  it("records overpayment reconciliation differences as tenant credit movements", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({
+      id: "period-1",
+      tenantId: "tenant-a",
+      contractId: "contract-1",
+      tenantPersonaId: "tenant-persona-1",
+      currency: "ARS"
+    } as never);
+    prisma.__tx.tenantBalanceMovement.create.mockResolvedValue({ id: "movement-1", tenantId: "tenant-a", type: "CREDIT" });
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.recordTenantBalanceMovement({
+      rentPeriodId: "period-1",
+      paidAmount: "120000.00",
+      realAmount: "100000.00",
+      currency: "ARS",
+      reason: "Real index lower than estimated period."
+    });
+
+    expect(prisma.__tx.tenantBalanceMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-a",
+        rentPeriodId: "period-1",
+        tenantPersonaId: "tenant-persona-1",
+        type: "CREDIT",
+        amount: "20000.00",
+        currency: "ARS",
+        reason: "Real index lower than estimated period."
+      })
+    });
+  });
+
+  it("records underpayment reconciliation differences as tenant debt movements", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({
+      id: "period-1",
+      tenantId: "tenant-a",
+      contractId: "contract-1",
+      tenantPersonaId: "tenant-persona-1",
+      currency: "ARS"
+    } as never);
+    prisma.__tx.tenantBalanceMovement.create.mockResolvedValue({ id: "movement-2", tenantId: "tenant-a", type: "DEBT" });
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.recordTenantBalanceMovement({ rentPeriodId: "period-1", paidAmount: "90000.00", realAmount: "100000.00", currency: "ARS" });
+
+    expect(prisma.__tx.tenantBalanceMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ type: "DEBT", amount: "10000.00" })
     });
   });
 });
