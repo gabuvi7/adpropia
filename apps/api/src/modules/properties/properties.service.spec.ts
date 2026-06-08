@@ -15,6 +15,26 @@ function createPrismaMock() {
       findFirst: vi.fn(),
       update: vi.fn()
     },
+    persona: {
+      findMany: vi.fn()
+    },
+    rentalContract: {
+      count: vi.fn()
+    },
+    propertyTypeCatalog: {
+      findFirst: vi.fn()
+    },
+    serviceType: {
+      findMany: vi.fn()
+    },
+    propertyOwner: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn()
+    },
+    propertyService: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn()
+    },
     $transaction: vi.fn()
   } as unknown as PrismaService;
 }
@@ -170,6 +190,74 @@ describe("PropertiesService", () => {
       entityId: "property-1",
       action: "property.updated",
       metadata: { changedFields: ["status"] }
+    });
+  });
+
+  it("rejects ownership participation when percentages do not total 100 percent", async () => {
+    const service = new PropertiesService(createPrismaMock(), createContextMock("tenant-a"), createAuditMock());
+
+    await expect(
+      service.updatePropertyOwnership("property-1", [
+        { personaId: "persona-1", ownershipShareBps: 6000 },
+        { personaId: "persona-2", ownershipShareBps: 3000 }
+      ])
+    ).rejects.toThrow("La participación de los propietarios debe sumar 100%.");
+  });
+
+  it("blocks ownership changes while an active contract references the property", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never);
+    vi.mocked(prisma.rentalContract.count).mockResolvedValue(1 as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expect(service.updatePropertyOwnership("property-1", [{ personaId: "persona-1", ownershipShareBps: 10000 }])).rejects.toThrow(
+      "No podés cambiar la titularidad mientras haya un contrato activo asociado a la propiedad."
+    );
+
+    expect(prisma.rentalContract.count).toHaveBeenCalledWith({ where: { tenantId: "tenant-a", propertyId: "property-1", status: "ACTIVE" } });
+  });
+
+  it("persists Persona ownership and service links for a rentable unit", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue({ id: "type-apartment", code: "APARTMENT" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }, { id: "persona-2" }] as never);
+    vi.mocked(prisma.serviceType.findMany).mockResolvedValue([{ id: "service-gas" }, { id: "service-electricity" }] as never);
+    const tx = {
+      property: { create: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never) },
+      propertyOwner: { createMany: vi.fn().mockResolvedValue({ count: 2 } as never) },
+      propertyService: { createMany: vi.fn().mockResolvedValue({ count: 2 } as never) }
+    };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), audit);
+
+    await service.createPropertyUnit({
+      propertyTypeId: "type-apartment",
+      addressLine: "Av. Belgrano 100",
+      owners: [
+        { personaId: "persona-1", ownershipShareBps: 7000 },
+        { personaId: "persona-2", ownershipShareBps: 3000 }
+      ],
+      services: [
+        { serviceTypeId: "service-gas", accountNumber: "G-123" },
+        { serviceTypeId: "service-electricity" }
+      ]
+    });
+
+    expect(tx.property.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tenantId: "tenant-a", propertyTypeId: "type-apartment", addressLine: "Av. Belgrano 100" })
+    });
+    expect(tx.propertyOwner.createMany).toHaveBeenCalledWith({
+      data: [
+        { tenantId: "tenant-a", propertyId: "property-1", personaId: "persona-1", ownershipShareBps: 7000 },
+        { tenantId: "tenant-a", propertyId: "property-1", personaId: "persona-2", ownershipShareBps: 3000 }
+      ]
+    });
+    expect(tx.propertyService.createMany).toHaveBeenCalledWith({
+      data: [
+        { tenantId: "tenant-a", propertyId: "property-1", serviceTypeId: "service-gas", accountNumber: "G-123" },
+        { tenantId: "tenant-a", propertyId: "property-1", serviceTypeId: "service-electricity", accountNumber: null }
+      ]
     });
   });
 });

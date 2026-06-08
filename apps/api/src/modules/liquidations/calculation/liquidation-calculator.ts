@@ -66,6 +66,50 @@ export type CalculatorResult = {
   totals: CalculatedTotals;
 };
 
+export type OwnerSettlementRentPeriod = {
+  rentPeriodId: string;
+  propertyId: string;
+  calculationState: "ESTIMATED" | "RECONCILED";
+  estimatedAmount: string;
+  realAmount: string | null;
+};
+
+export type OwnerSettlementOwnershipShare = {
+  propertyId: string;
+  ownerPersonaId: string;
+  ownershipShareBps: number;
+};
+
+export type OwnerSettlementInput = {
+  rentPeriodId: string;
+  propertyId: string;
+  ownerPersonaId: string;
+  realAmount: string;
+  contractCommissionBps: number;
+  commissionAmount: string;
+  ownerPayoutBaseAmount: string;
+  ownershipShareBps: number;
+  ownerPayoutAmount: string;
+  currency: Currency;
+};
+
+export type OwnerSettlementInputResult = {
+  ownerInputs: OwnerSettlementInput[];
+  totals: {
+    realAmount: string;
+    commissionAmount: string;
+    ownerPayoutBaseAmount: string;
+    currency: Currency;
+  };
+};
+
+export type OwnerSettlementCalculationInput = {
+  contractCommissionBps: number;
+  currency: Currency;
+  periods: OwnerSettlementRentPeriod[];
+  ownershipShares: OwnerSettlementOwnershipShare[];
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Implementation
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,8 +120,137 @@ const INCLUDED_PAYMENT_STATUSES: ReadonlySet<CalculatorPayment["status"]> = new 
   "OVERPAID"
 ]);
 
+const FULL_OWNERSHIP_BPS = 10000;
+const MIN_BPS = 0;
+
 function bigIntMin(a: bigint, b: bigint): bigint {
   return a < b ? a : b;
+}
+
+function calculateBpsAmount(amountCents: bigint, bps: number): bigint {
+  return (amountCents * BigInt(bps)) / BigInt(FULL_OWNERSHIP_BPS);
+}
+
+function calculateBpsAllocationsWithRemainder(
+  amountCents: bigint,
+  shares: OwnerSettlementOwnershipShare[]
+): bigint[] {
+  const rawAllocations = shares.map((share, index) => {
+    const numerator = amountCents * BigInt(share.ownershipShareBps);
+    return {
+      index,
+      floorCents: numerator / BigInt(FULL_OWNERSHIP_BPS),
+      remainder: numerator % BigInt(FULL_OWNERSHIP_BPS)
+    };
+  });
+
+  const allocations = rawAllocations.map((allocation) => allocation.floorCents);
+  const allocatedCents = allocations.reduce((sum, amount) => sum + amount, 0n);
+  let remainderCents = amountCents - allocatedCents;
+
+  const remainderOrder = [...rawAllocations].sort((a, b) => {
+    if (a.remainder > b.remainder) return -1;
+    if (a.remainder < b.remainder) return 1;
+    return a.index - b.index;
+  });
+
+  for (const allocation of remainderOrder) {
+    if (remainderCents <= 0n) break;
+    allocations[allocation.index] = (allocations[allocation.index] ?? 0n) + 1n;
+    remainderCents -= 1n;
+  }
+
+  return allocations;
+}
+
+function normalizeBps(value: number): number {
+  return Number.isFinite(value) ? Math.trunc(value) : 0;
+}
+
+function assertContractCommissionReady(commissionBps: number): void {
+  if (commissionBps < MIN_BPS || commissionBps > FULL_OWNERSHIP_BPS) {
+    throw new Error("La comisión del contrato debe estar entre 0% y 100%.");
+  }
+}
+
+function groupOwnershipShares(
+  shares: OwnerSettlementOwnershipShare[]
+): Map<string, OwnerSettlementOwnershipShare[]> {
+  const grouped = new Map<string, OwnerSettlementOwnershipShare[]>();
+  for (const share of shares) {
+    const entries = grouped.get(share.propertyId) ?? [];
+    entries.push(share);
+    grouped.set(share.propertyId, entries);
+  }
+  return grouped;
+}
+
+function assertOwnershipSharesReady(shares: OwnerSettlementOwnershipShare[]): void {
+  if (shares.length === 0) {
+    throw new Error("El contrato no tiene propietarios configurados para liquidar.");
+  }
+
+  const totalBps = shares.reduce((sum, share) => sum + share.ownershipShareBps, 0);
+  if (totalBps !== FULL_OWNERSHIP_BPS) {
+    throw new Error("La participación de propietarios debe sumar 100%.");
+  }
+}
+
+export function calculateOwnerSettlementInputs(
+  input: OwnerSettlementCalculationInput
+): OwnerSettlementInputResult {
+  const sharesByProperty = groupOwnershipShares(input.ownershipShares);
+  const contractCommissionBps = normalizeBps(input.contractCommissionBps);
+  assertContractCommissionReady(contractCommissionBps);
+  const ownerInputs: OwnerSettlementInput[] = [];
+  let totalRealCents = 0n;
+  let totalCommissionCents = 0n;
+  let totalOwnerPayoutBaseCents = 0n;
+
+  for (const period of input.periods) {
+    if (period.calculationState !== "RECONCILED" || period.realAmount === null) {
+      throw new Error("No se puede liquidar un período estimado sin monto real reconciliado.");
+    }
+
+    const shares = sharesByProperty.get(period.propertyId) ?? [];
+    assertOwnershipSharesReady(shares);
+
+    const realCents = toCents(period.realAmount);
+    const commissionCents = calculateBpsAmount(realCents, contractCommissionBps);
+    const ownerPayoutBaseCents = realCents - commissionCents;
+
+    totalRealCents += realCents;
+    totalCommissionCents += commissionCents;
+    totalOwnerPayoutBaseCents += ownerPayoutBaseCents;
+
+    const ownerPayoutAllocations = calculateBpsAllocationsWithRemainder(ownerPayoutBaseCents, shares);
+
+    for (const [index, share] of shares.entries()) {
+      const ownerPayoutCents = ownerPayoutAllocations[index] ?? 0n;
+      ownerInputs.push({
+        rentPeriodId: period.rentPeriodId,
+        propertyId: period.propertyId,
+        ownerPersonaId: share.ownerPersonaId,
+        realAmount: fromCents(realCents),
+        contractCommissionBps,
+        commissionAmount: fromCents(commissionCents),
+        ownerPayoutBaseAmount: fromCents(ownerPayoutBaseCents),
+        ownershipShareBps: share.ownershipShareBps,
+        ownerPayoutAmount: fromCents(ownerPayoutCents),
+        currency: input.currency
+      });
+    }
+  }
+
+  return {
+    ownerInputs,
+    totals: {
+      realAmount: fromCents(totalRealCents),
+      commissionAmount: fromCents(totalCommissionCents),
+      ownerPayoutBaseAmount: fromCents(totalOwnerPayoutBaseCents),
+      currency: input.currency
+    }
+  };
 }
 
 /**

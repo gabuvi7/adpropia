@@ -5,6 +5,10 @@ import { parseRequestBody } from "../../common/validation/zod-validation";
 import { createRenterSchema, updateRenterSchema } from "./renters.dto";
 import { RentersService } from "./renters.service";
 
+/**
+ * @deprecated Legacy renter routes are intentionally not registered in AppModule.
+ * Use Persona-based contract participant endpoints instead.
+ */
 @Controller("renters")
 export class RentersController {
   constructor(private readonly rentersService: RentersService) {}

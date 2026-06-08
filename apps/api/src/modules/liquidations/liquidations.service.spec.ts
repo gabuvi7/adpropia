@@ -18,6 +18,8 @@ function createPrismaMock() {
   return {
     owner: { findFirst: vi.fn(), findUnique: vi.fn() },
     tenant: { findUnique: vi.fn() },
+    rentalContract: { findUnique: vi.fn() },
+    rentPeriod: { findMany: vi.fn() },
     payment: { findMany: vi.fn() },
     property: { findMany: vi.fn() },
     tenantSettings: { findUnique: vi.fn(), findFirst: vi.fn() },
@@ -169,6 +171,36 @@ function mockProperties(
   );
 }
 
+function mockSettlementContract(
+  prisma: PrismaService,
+  owners: Array<{ personaId: string; ownershipShareBps: number }>,
+  overrides: { properties?: Array<{ propertyId: string; property: { owners: Array<{ personaId: string; ownershipShareBps: number }> } }>; commissionBps?: number } = {}
+) {
+  vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({
+    id: "contract-1",
+    tenantId: "tenant-a",
+    commissionBps: overrides.commissionBps ?? 1000,
+    currency: "ARS",
+    properties: overrides.properties ?? [{ propertyId: "prop-1", property: { owners } }]
+  } as never);
+}
+
+function mockSettlementPeriods(
+  prisma: PrismaService,
+  periods: Array<{ calculationState: "ESTIMATED" | "RECONCILED"; realAmount: string | null }>
+) {
+  vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue(
+    periods.map((period, index) => ({
+      id: `period-${index + 1}`,
+      contractId: "contract-1",
+      calculationState: period.calculationState,
+      estimatedAmount: "100000.00",
+      realAmount: period.realAmount,
+      currency: "ARS"
+    })) as never
+  );
+}
+
 function buildPrismaPayment(overrides: Record<string, unknown> = {}) {
   return {
     id: "pay-1",
@@ -314,6 +346,86 @@ describe("LiquidationsService — previewLiquidation", () => {
       where: { tenantId: "tenant-b" }
     });
   });
+});
+
+describe("LiquidationsService — computeOwnerSettlementInputs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("blocks estimated rent periods before returning owner settlement inputs", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, [{ personaId: "owner-persona-1", ownershipShareBps: 10000 }]);
+    mockSettlementPeriods(prisma, [{ calculationState: "ESTIMATED", realAmount: null }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(
+      service.computeOwnerSettlementInputs({
+        contractId: "contract-1",
+        periodStart: "2026-04-01T00:00:00.000Z",
+        periodEnd: "2026-04-30T23:59:59.999Z"
+      })
+    ).rejects.toThrow("No se puede liquidar un período estimado sin monto real reconciliado.");
+  });
+
+  it("loads contract commission, real rent periods, and property ownership shares for multiple owners", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, [
+      { personaId: "owner-persona-1", ownershipShareBps: 6000 },
+      { personaId: "owner-persona-2", ownershipShareBps: 4000 }
+    ]);
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "120000.00" }]);
+    const service = buildService(prisma, createContextMock());
+
+    const result = await service.computeOwnerSettlementInputs({
+      contractId: "contract-1",
+      periodStart: "2026-04-01T00:00:00.000Z",
+      periodEnd: "2026-04-30T23:59:59.999Z"
+    });
+
+    expect(prisma.rentalContract.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: expect.any(Object) }));
+    expect(prisma.rentPeriod.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.any(Object) }));
+    expect(result.ownerInputs.map((input) => input.ownerPayoutAmount)).toEqual(["64800.00", "43200.00"]);
+    expect(result.totals.ownerPayoutBaseAmount).toBe("108000.00");
+  });
+
+  it("rejects contracts without properties before calculating settlement inputs", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, [], { properties: [] });
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
+      "El contrato no tiene propiedades configuradas para liquidar."
+    );
+  });
+
+  it("rejects contracts whose property has no owner shares", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, []);
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
+      "El contrato no tiene propietarios configurados para liquidar."
+    );
+  });
+
+  it("rejects contract commissions outside 0% to 100%", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(
+      prisma,
+      [{ personaId: "owner-persona-1", ownershipShareBps: 10000 }],
+      { commissionBps: 10001 }
+    );
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
+      "La comisión del contrato debe estar entre 0% y 100%."
+    );
+  });
+
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -20,6 +20,22 @@ export type ContractBalance = {
   payments: PaymentRecord[];
 };
 
+export interface RecordRentPaymentDto {
+  rentPeriodId: string;
+  amount: string;
+  currency: Currency;
+  paidAt: string;
+  notes?: string | undefined;
+}
+
+export interface RecordTenantBalanceMovementDto {
+  rentPeriodId: string;
+  paidAmount: string;
+  realAmount: string;
+  currency: Currency;
+  reason?: string | undefined;
+}
+
 @Injectable()
 export class PaymentsService {
   constructor(
@@ -123,6 +139,123 @@ export class PaymentsService {
       },
       orderBy: { dueAt: "desc" }
     });
+  }
+
+  async recordRentPayment(input: RecordRentPaymentDto): Promise<unknown> {
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
+    const period = await this.prisma.rentPeriod.findUnique({ where: { id_tenantId: { id: input.rentPeriodId, tenantId } } });
+
+    if (!period) {
+      throw new BadRequestException("El período de alquiler indicado no existe en esta inmobiliaria.");
+    }
+
+    if (period.currency !== input.currency) {
+      throw new BadRequestException("La moneda del pago no coincide con la del período de alquiler.");
+    }
+
+    const paidAt = new Date(input.paidAt);
+    const type = period.calculationState === "ESTIMATED" ? "ON_ACCOUNT" : "FINAL";
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const rentPayment = await tx.rentPayment.create({
+          data: {
+            tenantId,
+            rentPeriodId: input.rentPeriodId,
+            type,
+            amount: input.amount,
+            currency: input.currency,
+            paidAt,
+            cashMovementId: null,
+            commissionMovementId: null,
+            notes: input.notes?.trim() ?? null
+          }
+        });
+
+        if (toCents(input.amount) > 0n) {
+          await tx.cashMovement.create({
+            data: {
+              tenantId,
+              type: "INCOME",
+              amount: input.amount,
+              currency: input.currency,
+              occurredAt: paidAt,
+              sourceType: "RENT_PAYMENT",
+              sourceId: rentPayment.id,
+              ...(input.notes !== undefined ? { reason: input.notes } : {})
+            }
+          });
+        }
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "rent_payment",
+          entityId: rentPayment.id,
+          action: "rent_payment.recorded",
+          metadata: { rentPeriodId: input.rentPeriodId, type, currency: input.currency }
+        });
+
+        return rentPayment;
+      });
+    } catch {
+      throw new BadRequestException("No pudimos registrar el pago de alquiler. Revisá los datos enviados.");
+    }
+  }
+
+  async recordTenantBalanceMovement(input: RecordTenantBalanceMovementDto): Promise<unknown> {
+    const ctx = this.contextService.get();
+    const { tenantId } = ctx;
+    const period = await this.prisma.rentPeriod.findUnique({ where: { id_tenantId: { id: input.rentPeriodId, tenantId } } });
+
+    if (!period) {
+      throw new BadRequestException("El período de alquiler indicado no existe en esta inmobiliaria.");
+    }
+
+    if (!period.tenantPersonaId) {
+      throw new BadRequestException("El período de alquiler necesita un inquilino asociado para registrar saldo.");
+    }
+    const tenantPersonaId = period.tenantPersonaId;
+
+    if (period.currency !== input.currency) {
+      throw new BadRequestException("La moneda del saldo no coincide con la del período de alquiler.");
+    }
+
+    const paidCents = toCents(input.paidAmount);
+    const realCents = toCents(input.realAmount);
+    const differenceCents = paidCents - realCents;
+    if (differenceCents === 0n) {
+      throw new BadRequestException("No hay diferencia para registrar en el saldo del inquilino.");
+    }
+
+    const type = differenceCents > 0n ? "CREDIT" : "DEBT";
+    const amount = fromCents(differenceCents > 0n ? differenceCents : -differenceCents);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const movement = await tx.tenantBalanceMovement.create({
+          data: {
+            tenantId,
+            rentPeriodId: input.rentPeriodId,
+            tenantPersonaId,
+            type,
+            amount,
+            currency: input.currency,
+            reason: input.reason?.trim() ?? null
+          }
+        });
+
+        await this.audit.createEntryWithClient(tx, ctx, {
+          entityType: "tenant_balance_movement",
+          entityId: movement.id,
+          action: "tenant_balance_movement.recorded",
+          metadata: { rentPeriodId: input.rentPeriodId, type, currency: input.currency }
+        });
+
+        return movement;
+      });
+    } catch {
+      throw new BadRequestException("No pudimos registrar el saldo del inquilino. Revisá los datos enviados.");
+    }
   }
 
   async getPaymentById(id: string): Promise<PaymentRecord> {

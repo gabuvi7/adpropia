@@ -5,6 +5,10 @@ import { parseRequestBody } from "../../common/validation/zod-validation";
 import { createOwnerSchema, updateOwnerSchema } from "./owners.dto";
 import { OwnersService } from "./owners.service";
 
+/**
+ * @deprecated Legacy owner routes are intentionally not registered in AppModule.
+ * Use Persona-based ownership endpoints instead.
+ */
 @Controller("owners")
 export class OwnersController {
   constructor(private readonly ownersService: OwnersService) {}
