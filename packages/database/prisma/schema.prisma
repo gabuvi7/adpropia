@@ -115,6 +115,27 @@ enum GuaranteeState {
   EXPIRED
 }
 
+enum RentPeriodCalculationState {
+  ESTIMATED
+  RECONCILED
+}
+
+enum RentPaymentType {
+  ON_ACCOUNT
+  FINAL
+  BALANCE_ADJUSTMENT
+}
+
+enum TenantBalanceMovementType {
+  CREDIT
+  DEBT
+}
+
+enum ContractAdjustmentState {
+  PENDING_RECONCILIATION
+  RECONCILED
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   auth0OrgId   String?      @unique
@@ -140,6 +161,10 @@ model Tenant {
   guaranteePropertyBackeds     GuaranteePropertyBacked[]
   guaranteeTitleHolders        GuaranteeTitleHolder[]
   depositPacts                 DepositPact[]
+  rentPeriods                  RentPeriod[]
+  rentPayments                 RentPayment[]
+  tenantBalanceMovements       TenantBalanceMovement[]
+  contractAdjustments          ContractAdjustment[]
   indexValues                  CustomIndexValue[]
   payments                     Payment[]
   cashMovements                CashMovement[]
@@ -187,6 +212,8 @@ model Persona {
   juridica PersonaJuridica?
   ownedProperties PropertyOwner[]
   contractParticipations ContractParticipant[]
+  rentPeriods RentPeriod[]
+  balanceMovements TenantBalanceMovement[]
 
   @@unique([id, tenantId])
   @@index([tenantId])
@@ -491,6 +518,8 @@ model RentalContract {
   properties       ContractProperty[]
   guarantees       Guarantee[]
   depositPact      DepositPact?
+  rentPeriods      RentPeriod[]
+  contractAdjustments ContractAdjustment[]
   payments         Payment[]
 
   @@unique([id, tenantId])
@@ -666,6 +695,88 @@ model DepositPact {
   @@map("deposit_pacts")
 }
 
+model RentPeriod {
+  id                   String                     @id @default(cuid())
+  tenantId             String
+  contractId           String
+  tenantPersonaId      String?
+  periodStart          DateTime
+  periodEnd            DateTime
+  dueAt                DateTime
+  currency             Currency                   @default(ARS)
+  calculationState     RentPeriodCalculationState @default(ESTIMATED)
+  estimatedAmount      Decimal                    @db.Decimal(14, 2)
+  realAmount           Decimal?                   @db.Decimal(14, 2)
+  estimatedIndexType   EconomicIndexType?
+  estimatedIndexValue  Decimal?                   @db.Decimal(18, 6)
+  estimatedIndexSource String?
+  realIndexValue       Decimal?                   @db.Decimal(18, 6)
+  realIndexSource      String?
+  reconciledAt         DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contract         RentalContract          @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  tenantPersona    Persona?                @relation(fields: [tenantPersonaId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  payments         RentPayment[]
+  balanceMovements TenantBalanceMovement[]
+  contractAdjustments ContractAdjustment[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, contractId, periodStart])
+  @@index([tenantId])
+  @@index([tenantId, contractId])
+  @@index([tenantId, tenantPersonaId])
+  @@index([tenantId, calculationState])
+  @@map("rent_periods")
+}
+
+model RentPayment {
+  id                   String          @id @default(cuid())
+  tenantId             String
+  rentPeriodId         String
+  type                 RentPaymentType
+  amount               Decimal         @db.Decimal(14, 2)
+  currency             Currency        @default(ARS)
+  paidAt               DateTime
+  cashMovementId       String?
+  commissionMovementId String?
+  notes                String?
+  createdAt            DateTime        @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rentPeriod RentPeriod @relation(fields: [rentPeriodId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([tenantId, rentPeriodId])
+  @@index([tenantId, paidAt])
+  @@map("rent_payments")
+}
+
+model TenantBalanceMovement {
+  id              String                    @id @default(cuid())
+  tenantId        String
+  tenantPersonaId String
+  rentPeriodId    String
+  type            TenantBalanceMovementType
+  amount          Decimal                   @db.Decimal(14, 2)
+  currency        Currency                  @default(ARS)
+  reason          String?
+  createdAt       DateTime                  @default(now())
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantPersona Persona    @relation(fields: [tenantPersonaId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  rentPeriod    RentPeriod @relation(fields: [rentPeriodId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([tenantId, tenantPersonaId])
+  @@index([tenantId, rentPeriodId])
+  @@map("tenant_balance_movements")
+}
+
 model EconomicIndex {
   id        String            @id @default(cuid())
   type      EconomicIndexType
@@ -688,20 +799,60 @@ model CustomIndexValue {
   periodDate      DateTime
   value           Decimal  @db.Decimal(18, 6)
   isManual        Boolean  @default(true)
+  source          String?
+  publishedAt     DateTime?
+  idempotencyKey  String?
   uploadedById    String?
   metadata        Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  economicIndex EconomicIndex @relation(fields: [economicIndexId], references: [id])
-  uploadedBy    User?         @relation(fields: [uploadedById], references: [id])
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  economicIndex       EconomicIndex        @relation(fields: [economicIndexId], references: [id])
+  uploadedBy          User?                @relation(fields: [uploadedById], references: [id])
+  contractAdjustments ContractAdjustment[]
 
   @@unique([id, tenantId])
   @@unique([tenantId, economicIndexId, periodDate])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId])
   @@index([economicIndexId])
+  @@index([source])
   @@map("custom_index_values")
+}
+
+model ContractAdjustment {
+  id                   String                  @id @default(cuid())
+  tenantId             String
+  contractId           String
+  rentPeriodId         String
+  economicIndexValueId String
+  source               String
+  type                 EconomicIndexType
+  frequencyMonths      Int?
+  state                ContractAdjustmentState @default(PENDING_RECONCILIATION)
+  estimatedAmount      Decimal                 @db.Decimal(14, 2)
+  estimatedIndexValue  Decimal?                @db.Decimal(18, 6)
+  estimatedIndexSource String?
+  realIndexValue       Decimal                 @db.Decimal(18, 6)
+  realAmount           Decimal?                @db.Decimal(14, 2)
+  differenceAmount     Decimal?                @db.Decimal(14, 2)
+  reconciledAt         DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contract           RentalContract   @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  rentPeriod         RentPeriod       @relation(fields: [rentPeriodId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  economicIndexValue CustomIndexValue @relation(fields: [economicIndexValueId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, rentPeriodId, economicIndexValueId])
+  @@index([tenantId])
+  @@index([tenantId, contractId])
+  @@index([tenantId, rentPeriodId])
+  @@index([tenantId, state])
+  @@map("contract_adjustments")
 }
 
 model Payment {
