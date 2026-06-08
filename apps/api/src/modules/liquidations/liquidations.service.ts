@@ -18,8 +18,10 @@ import {
   type CalculatorPayment,
   type CalculatorPropertyCommission,
   type CalculatorResult,
+  calculateOwnerSettlementInputs,
   LiquidationCalculator
 } from "./calculation/liquidation-calculator";
+import type { OwnerSettlementInputResult } from "./calculation/liquidation-calculator";
 import { PDF_RENDERER, type PdfRenderer, type RenderLiquidationInput, type LegalIdentity } from "./pdf/pdf-renderer";
 import { LiquidationStateMachine } from "./state-machine/liquidation-state-machine";
 import type {
@@ -66,6 +68,31 @@ type CalculatorInputs = {
   defaultCommissionBps: number;
 };
 
+type ContractForOwnerSettlement = {
+  id: string;
+  tenantId: string;
+  commissionBps: number;
+  currency: Currency;
+  properties: Array<{
+    propertyId: string;
+    property: {
+      owners: Array<{
+        personaId: string;
+        ownershipShareBps: number;
+      }>;
+    };
+  }>;
+};
+
+type RentPeriodForOwnerSettlement = {
+  id: string;
+  contractId: string;
+  calculationState: "ESTIMATED" | "RECONCILED";
+  estimatedAmount: Prisma.Decimal | string | number;
+  realAmount: Prisma.Decimal | string | number | null;
+  currency: Currency;
+};
+
 @Injectable()
 export class LiquidationsService {
   private readonly logger = new Logger(LiquidationsService.name);
@@ -105,6 +132,71 @@ export class LiquidationsService {
       periodStart,
       periodEnd
     });
+  }
+
+  async computeOwnerSettlementInputs(
+    input: { contractId: string; periodStart?: string; periodEnd?: string }
+  ): Promise<OwnerSettlementInputResult> {
+    const { tenantId } = this.contextService.get();
+    const contract = (await this.prisma.rentalContract.findUnique({
+      where: { id_tenantId: { id: input.contractId, tenantId } },
+      include: {
+        properties: {
+          include: {
+            property: {
+              include: { owners: true }
+            }
+          }
+        }
+      }
+    })) as unknown as ContractForOwnerSettlement | null;
+
+    if (!contract) {
+      throw new NotFoundException("No encontramos el contrato solicitado.");
+    }
+
+    const periodWhere: Prisma.RentPeriodWhereInput = {
+      tenantId,
+      contractId: input.contractId,
+      ...(input.periodStart !== undefined ? { periodStart: { gte: new Date(input.periodStart) } } : {}),
+      ...(input.periodEnd !== undefined ? { periodEnd: { lte: new Date(input.periodEnd) } } : {})
+    };
+
+    const rentPeriods = (await this.prisma.rentPeriod.findMany({
+      where: periodWhere,
+      orderBy: [{ periodStart: "asc" }, { id: "asc" }]
+    })) as unknown as RentPeriodForOwnerSettlement[];
+
+    const contractPropertyId = contract.properties[0]?.propertyId;
+    if (!contractPropertyId) {
+      throw new BadRequestException("El contrato no tiene propiedades configuradas para liquidar.");
+    }
+
+    try {
+      return calculateOwnerSettlementInputs({
+        contractCommissionBps: contract.commissionBps,
+        currency: contract.currency,
+        periods: rentPeriods.map((period) => ({
+          rentPeriodId: period.id,
+          propertyId: contractPropertyId,
+          calculationState: period.calculationState,
+          estimatedAmount: toDecimalString(period.estimatedAmount),
+          realAmount: period.realAmount === null ? null : toDecimalString(period.realAmount)
+        })),
+        ownershipShares: contract.properties.flatMap((contractProperty) =>
+          contractProperty.property.owners.map((owner) => ({
+            propertyId: contractProperty.propertyId,
+            ownerPersonaId: owner.personaId,
+            ownershipShareBps: owner.ownershipShareBps
+          }))
+        )
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   async createLiquidation(input: CreateLiquidationDto): Promise<LiquidationRecord> {

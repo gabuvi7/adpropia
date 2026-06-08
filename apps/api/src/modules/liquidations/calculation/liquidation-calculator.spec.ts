@@ -5,6 +5,7 @@ import {
   type CalculatorInput,
   type CalculatorPayment,
   type CalculatorPropertyCommission,
+  calculateOwnerSettlementInputs,
   LiquidationCalculator
 } from "./liquidation-calculator";
 
@@ -568,6 +569,225 @@ describe("LiquidationCalculator", () => {
       expect(result.totals.grossAmount).toBe("100000.00");
       expect(result.totals.commissionAmount).toBe("6500.00");
       expect(result.totals.netAmount).toBe("93500.00");
+    });
+  });
+
+  describe("owner settlement inputs", () => {
+    it("blocks estimated rent periods before owner settlement inputs are calculated", () => {
+      expect(() =>
+        calculateOwnerSettlementInputs({
+          contractCommissionBps: 1000,
+          currency: "ARS",
+          periods: [
+            {
+              rentPeriodId: "period-1",
+              propertyId: "prop-1",
+              calculationState: "ESTIMATED",
+              estimatedAmount: "120000.00",
+              realAmount: null
+            }
+          ],
+          ownershipShares: [
+            { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 10000 }
+          ]
+        })
+      ).toThrow("No se puede liquidar un período estimado sin monto real reconciliado.");
+    });
+
+    it("uses reconciled real amount minus contract commission and distributes by ownership share", () => {
+      const result = calculateOwnerSettlementInputs({
+        contractCommissionBps: 1000,
+        currency: "ARS",
+        periods: [
+          {
+            rentPeriodId: "period-1",
+            propertyId: "prop-1",
+            calculationState: "RECONCILED",
+            estimatedAmount: "100000.00",
+            realAmount: "120000.00"
+          }
+        ],
+        ownershipShares: [
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 6000 },
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-2", ownershipShareBps: 4000 }
+        ]
+      });
+
+      expect(result.totals).toEqual({
+        realAmount: "120000.00",
+        commissionAmount: "12000.00",
+        ownerPayoutBaseAmount: "108000.00",
+        currency: "ARS"
+      });
+      expect(result.ownerInputs.map((input) => input.ownerPersonaId)).toEqual([
+        "owner-persona-1",
+        "owner-persona-2"
+      ]);
+      expect(result.ownerInputs.map((input) => input.ownershipShareBps)).toEqual([6000, 4000]);
+      expect(result.ownerInputs.map((input) => input.ownerPayoutAmount)).toEqual(["64800.00", "43200.00"]);
+      expect(result.ownerInputs[0]).toEqual(
+        expect.objectContaining({
+          rentPeriodId: "period-1",
+          propertyId: "prop-1",
+          realAmount: "120000.00",
+          contractCommissionBps: 1000,
+          commissionAmount: "12000.00",
+          ownerPayoutBaseAmount: "108000.00",
+          currency: "ARS"
+        })
+      );
+    });
+
+    it("triangulates multiple owners with uneven cents while preserving the payout base", () => {
+      const result = calculateOwnerSettlementInputs({
+        contractCommissionBps: 333,
+        currency: "ARS",
+        periods: [
+          {
+            rentPeriodId: "period-2",
+            propertyId: "prop-1",
+            calculationState: "RECONCILED",
+            estimatedAmount: "999.00",
+            realAmount: "1000.01"
+          }
+        ],
+        ownershipShares: [
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 3333 },
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-2", ownershipShareBps: 3333 },
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-3", ownershipShareBps: 3334 }
+        ]
+      });
+
+      expect(result.totals).toEqual({
+        realAmount: "1000.01",
+        commissionAmount: "33.30",
+        ownerPayoutBaseAmount: "966.71",
+        currency: "ARS"
+      });
+      expect(result.ownerInputs.map((input) => input.ownerPayoutAmount)).toEqual([
+        "322.21",
+        "322.20",
+        "322.30"
+      ]);
+    });
+
+    it("rejects reconciled periods without real amount because they are not settlement eligible", () => {
+      expect(() =>
+        calculateOwnerSettlementInputs({
+          contractCommissionBps: 0,
+          currency: "ARS",
+          periods: [
+            {
+              rentPeriodId: "period-without-real-amount",
+              propertyId: "prop-1",
+              calculationState: "RECONCILED",
+              estimatedAmount: "100000.00",
+              realAmount: null
+            }
+          ],
+          ownershipShares: [
+            { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 10000 }
+          ]
+        })
+      ).toThrow("No se puede liquidar un período estimado sin monto real reconciliado.");
+    });
+
+    it("rejects ownership shares that do not add up to 100%", () => {
+      expect(() =>
+        calculateOwnerSettlementInputs({
+          contractCommissionBps: 0,
+          currency: "ARS",
+          periods: [
+            {
+              rentPeriodId: "period-ownership-gap",
+              propertyId: "prop-1",
+              calculationState: "RECONCILED",
+              estimatedAmount: "100000.00",
+              realAmount: "100000.00"
+            }
+          ],
+          ownershipShares: [
+            { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 5000 },
+            { propertyId: "prop-1", ownerPersonaId: "owner-persona-2", ownershipShareBps: 4000 }
+          ]
+        })
+      ).toThrow("La participación de propietarios debe sumar 100%.");
+    });
+
+    it("supports zero commission by paying the full real amount to owners", () => {
+      const result = calculateOwnerSettlementInputs({
+        contractCommissionBps: 0,
+        currency: "ARS",
+        periods: [
+          {
+            rentPeriodId: "period-zero-commission",
+            propertyId: "prop-1",
+            calculationState: "RECONCILED",
+            estimatedAmount: "90000.00",
+            realAmount: "100000.00"
+          }
+        ],
+        ownershipShares: [
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 2500 },
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-2", ownershipShareBps: 7500 }
+        ]
+      });
+
+      expect(result.totals).toEqual({
+        realAmount: "100000.00",
+        commissionAmount: "0.00",
+        ownerPayoutBaseAmount: "100000.00",
+        currency: "ARS"
+      });
+      expect(result.ownerInputs.map((input) => input.ownerPayoutAmount)).toEqual(["25000.00", "75000.00"]);
+    });
+
+    it.each([
+      { commissionBps: -1, expectedMessage: "La comisión del contrato debe estar entre 0% y 100%." },
+      { commissionBps: 10001, expectedMessage: "La comisión del contrato debe estar entre 0% y 100%." }
+    ])("rejects invalid contract commission $commissionBps bps", ({ commissionBps, expectedMessage }) => {
+      expect(() =>
+        calculateOwnerSettlementInputs({
+          contractCommissionBps: commissionBps,
+          currency: "ARS",
+          periods: [
+            {
+              rentPeriodId: "period-invalid-commission",
+              propertyId: "prop-1",
+              calculationState: "RECONCILED",
+              estimatedAmount: "100000.00",
+              realAmount: "100000.00"
+            }
+          ],
+          ownershipShares: [
+            { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 10000 }
+          ]
+        })
+      ).toThrow(expectedMessage);
+    });
+
+    it("allocates rounding remainder so owner payout inputs add up to the payout base", () => {
+      const result = calculateOwnerSettlementInputs({
+        contractCommissionBps: 0,
+        currency: "ARS",
+        periods: [
+          {
+            rentPeriodId: "period-remainder",
+            propertyId: "prop-1",
+            calculationState: "RECONCILED",
+            estimatedAmount: "0.00",
+            realAmount: "100.01"
+          }
+        ],
+        ownershipShares: [
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-1", ownershipShareBps: 3333 },
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-2", ownershipShareBps: 3333 },
+          { propertyId: "prop-1", ownerPersonaId: "owner-persona-3", ownershipShareBps: 3334 }
+        ]
+      });
+
+      expect(result.totals.ownerPayoutBaseAmount).toBe("100.01");
+      expect(result.ownerInputs.map((input) => input.ownerPayoutAmount)).toEqual(["33.33", "33.33", "33.35"]);
     });
   });
 });
