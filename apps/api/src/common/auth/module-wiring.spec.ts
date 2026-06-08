@@ -1,4 +1,7 @@
 import "reflect-metadata";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AppModule, appModules, protectedRoutes } from "../../app.module";
 import { LiquidationsModule } from "../../modules/liquidations/liquidations.module";
@@ -20,6 +23,10 @@ import { PaymentsController } from "../../modules/payments/payments.controller";
 import { CashMovementsController } from "../../modules/payments/cash-movements.controller";
 import { ReportsController } from "../../modules/reports/reports.controller";
 import { TenantsController } from "../../modules/tenants/tenants.controller";
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const apiRoot = resolve(currentDir, "../../..");
+const workspaceRoot = resolve(apiRoot, "../..");
 
 describe("Module wiring", () => {
   it("AppModule declares APP_GUARD in its providers", () => {
@@ -65,6 +72,30 @@ describe("Module wiring", () => {
   it("keeps active rental routes protected while excluding legacy owner/renter route names", () => {
     expect([...protectedRoutes]).toEqual(expect.arrayContaining(["properties", "contracts", "payments"]));
     expect([...protectedRoutes]).not.toEqual(expect.arrayContaining(["owners", "renters"]));
+  });
+
+  it("removes deprecated legacy owner/renter internals once they are no longer active imports", () => {
+    const deprecatedLegacyFiles = [
+      "src/modules/owners/owners.controller.ts",
+      "src/modules/owners/owners.dto.ts",
+      "src/modules/owners/owners.module.ts",
+      "src/modules/owners/owners.service.ts",
+      "src/modules/owners/owners.service.spec.ts",
+      "src/modules/renters/renters.controller.ts",
+      "src/modules/renters/renters.dto.ts",
+      "src/modules/renters/renters.module.ts",
+      "src/modules/renters/renters.service.ts",
+      "src/modules/renters/renters.service.spec.ts"
+    ];
+
+    expect(deprecatedLegacyFiles.filter((filePath) => existsSync(resolve(apiRoot, filePath)))).toEqual([]);
+  });
+
+  it("keeps destructive legacy owner/renter database removal behind a migration-safety checkpoint", () => {
+    const prismaSchema = readFileSync(resolve(workspaceRoot, "packages/database/prisma/schema.prisma"), "utf8");
+
+    expect(prismaSchema).toContain("model Owner");
+    expect(prismaSchema).toContain("model Renter");
   });
 });
 
