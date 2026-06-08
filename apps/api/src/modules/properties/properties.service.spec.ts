@@ -201,7 +201,7 @@ describe("PropertiesService", () => {
         { personaId: "persona-1", ownershipShareBps: 6000 },
         { personaId: "persona-2", ownershipShareBps: 3000 }
       ])
-    ).rejects.toThrow("Ownership participation must total 100%.");
+    ).rejects.toThrow("La participación de los propietarios debe sumar 100%.");
   });
 
   it("blocks ownership changes while an active contract references the property", async () => {
@@ -211,7 +211,7 @@ describe("PropertiesService", () => {
     const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
 
     await expect(service.updatePropertyOwnership("property-1", [{ personaId: "persona-1", ownershipShareBps: 10000 }])).rejects.toThrow(
-      "Ownership cannot be changed while an active contract references the property."
+      "No podés cambiar la titularidad mientras haya un contrato activo asociado a la propiedad."
     );
 
     expect(prisma.rentalContract.count).toHaveBeenCalledWith({ where: { tenantId: "tenant-a", propertyId: "property-1", status: "ACTIVE" } });

@@ -36,7 +36,7 @@ describe("Persona identity foundation", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.message)).toContain("A natural person must include DNI and/or CUIT.");
+    expect(result.error?.issues.map((issue) => issue.message)).toContain("Una persona física debe incluir DNI y/o CUIT.");
   });
 
   it("accepts a natural person with DNI only or CUIT only", () => {
@@ -63,7 +63,7 @@ describe("Persona identity foundation", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.message)).toContain("A legal person must include CUIT.");
+    expect(result.error?.issues.map((issue) => issue.message)).toContain("Una persona jurídica debe incluir CUIT.");
   });
 
   it("creates personas only with the active tenantId", async () => {

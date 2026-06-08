@@ -16,6 +16,12 @@ function createPrismaMock() {
     renter: {
       findFirst: vi.fn()
     },
+    persona: {
+      findMany: vi.fn()
+    },
+    propertyOwner: {
+      findMany: vi.fn()
+    },
     rentalContract: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -50,6 +56,24 @@ const createInput = {
   dueDayOfMonth: 10,
   adjustmentIndexType: "ICL" as const,
   adjustmentPeriodMonths: 3
+};
+
+const contractStructureInput = {
+  participantPersonaIds: ["tenant-persona-1", "tenant-persona-2"],
+  properties: [
+    { propertyId: "property-1", monthlyAmount: "600000.00" },
+    { propertyId: "property-2", monthlyAmount: "400000.00" }
+  ],
+  status: "PENDING_SIGNATURE" as const,
+  startsAt: "2026-05-01T00:00:00.000Z",
+  endsAt: "2027-04-30T00:00:00.000Z",
+  monthlyTotalAmount: "1000000.00",
+  currency: "ARS" as const,
+  dueDayOfMonth: 10,
+  adjustmentIndexType: "ICL" as const,
+  adjustmentPeriodMonths: 3,
+  commissionBps: 500,
+  previousContractId: "contract-previous"
 };
 
 function mockValidRelations(prisma: PrismaService, tenantId = "tenant-a", ownerId = "owner-1") {
@@ -170,5 +194,117 @@ describe("ContractsService", () => {
       expect.objectContaining({ tenantId: "tenant-f" }),
       expect.objectContaining({ action: "contract.status.changed", entityId: "contract-1" })
     );
+  });
+
+  it("rejects structured contracts when selected properties have different owner groups", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst)
+      .mockResolvedValueOnce({ id: "property-1", tenantId: "tenant-a" } as never)
+      .mockResolvedValueOnce({ id: "property-2", tenantId: "tenant-a" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "tenant-persona-1" }, { id: "tenant-persona-2" }] as never);
+    vi.mocked(prisma.propertyOwner.findMany)
+      .mockResolvedValueOnce([
+        { personaId: "owner-a", ownershipShareBps: 7000 },
+        { personaId: "owner-b", ownershipShareBps: 3000 }
+      ] as never)
+      .mockResolvedValueOnce([
+        { personaId: "owner-a", ownershipShareBps: 6000 },
+        { personaId: "owner-b", ownershipShareBps: 4000 }
+      ] as never);
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expect(service.createContractStructure(contractStructureInput)).rejects.toThrow(
+      "Todas las propiedades del contrato deben compartir el mismo grupo de propietarios y porcentajes de titularidad."
+    );
+
+    expect(prisma.rentalContract.create).not.toHaveBeenCalled();
+  });
+
+  it("creates structured contracts with multiple tenants, multiple properties, lifecycle data, and no tenant liability percentages", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst)
+      .mockResolvedValueOnce({ id: "property-1", tenantId: "tenant-a" } as never)
+      .mockResolvedValueOnce({ id: "property-2", tenantId: "tenant-a" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "tenant-persona-1" }, { id: "tenant-persona-2" }] as never);
+    vi.mocked(prisma.propertyOwner.findMany)
+      .mockResolvedValueOnce([
+        { personaId: "owner-a", ownershipShareBps: 7000 },
+        { personaId: "owner-b", ownershipShareBps: 3000 }
+      ] as never)
+      .mockResolvedValueOnce([
+        { personaId: "owner-a", ownershipShareBps: 7000 },
+        { personaId: "owner-b", ownershipShareBps: 3000 }
+      ] as never);
+    const tx = {
+      rentalContract: { create: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-a" } as never) },
+      contractParticipant: { createMany: vi.fn().mockResolvedValue({ count: 2 } as never) },
+      contractProperty: { createMany: vi.fn().mockResolvedValue({ count: 2 } as never) }
+    };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const audit = createAuditMock();
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), audit);
+
+    await service.createContractStructure(contractStructureInput);
+
+    expect(tx.rentalContract.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-a",
+        status: "PENDING_SIGNATURE",
+        currency: "ARS",
+        monthlyTotalAmount: "1000000.00",
+        commissionBps: 500,
+        previousContractId: "contract-previous"
+      })
+    });
+    expect(tx.contractParticipant.createMany).toHaveBeenCalledWith({
+      data: [
+        { tenantId: "tenant-a", contractId: "contract-1", personaId: "tenant-persona-1" },
+        { tenantId: "tenant-a", contractId: "contract-1", personaId: "tenant-persona-2" }
+      ]
+    });
+    expect(tx.contractProperty.createMany).toHaveBeenCalledWith({
+      data: [
+        { tenantId: "tenant-a", contractId: "contract-1", propertyId: "property-1", monthlyAmount: "600000.00" },
+        { tenantId: "tenant-a", contractId: "contract-1", propertyId: "property-2", monthlyAmount: "400000.00" }
+      ]
+    });
+  });
+
+  it("records early finalization metadata with OTHER reason description", async () => {
+    const prisma = createPrismaMock();
+    const tx = { rentalContract: { update: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-a", status: "FINALIZED" } as never) } };
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx)
+    );
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.finalizeContractEarly("contract-1", {
+      finalizedAt: "2026-10-15T00:00:00.000Z",
+      finalizationReason: "OTHER",
+      finalizationDescription: "Mutual agreement outside standard reasons."
+    });
+
+    expect(tx.rentalContract.update).toHaveBeenCalledWith({
+      where: { id_tenantId: { id: "contract-1", tenantId: "tenant-a" } },
+      data: {
+        status: "FINALIZED",
+        finalizedAt: new Date("2026-10-15T00:00:00.000Z"),
+        finalizationReason: "OTHER",
+        finalizationDescription: "Mutual agreement outside standard reasons."
+      }
+    });
+  });
+
+  it("requires a Spanish user-facing message when finalization reason OTHER has no description", async () => {
+    const service = new ContractsService(createPrismaMock(), createContextMock("tenant-a"), createAuditMock());
+
+    await expect(
+      service.finalizeContractEarly("contract-1", {
+        finalizedAt: "2026-10-15T00:00:00.000Z",
+        finalizationReason: "OTHER"
+      })
+    ).rejects.toThrow("Tenés que indicar una descripción cuando el motivo de finalización es Otro.");
   });
 });
