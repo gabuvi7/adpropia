@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { linkTenantAuth0OrgSchema } from "./admin/admin-provisioning.dto";
 import { createContractSchema } from "./contracts/contracts.dto";
 import { createLiquidationSchema } from "./liquidations/liquidations.dto";
-import { createOwnerSchema } from "./owners/owners.dto";
+import { createPersonaSchema } from "./personas/personas.dto";
 import { balanceQuerySchema } from "./payments/payments.dto";
 import { createPropertySchema } from "./properties/properties.dto";
 import { cashFlowQuerySchema } from "./reports/reports.dto";
@@ -17,8 +17,8 @@ const firstMessage = (schema: { safeParse: (input: unknown) => { success: boolea
 
 describe("Zod validation required messages", () => {
   it("keeps required and invalid-type messages distinct for required scalar fields", () => {
-    expect(firstMessage(createOwnerSchema, {})).toBe("El nombre visible es obligatorio.");
-    expect(firstMessage(createOwnerSchema, { displayName: 42 })).toBe("El nombre visible debe ser texto.");
+    expect(firstMessage(createPersonaSchema, {})).toBe("El nombre visible es obligatorio.");
+    expect(firstMessage(createPersonaSchema, { displayName: 42 })).toBe("El nombre visible debe ser texto.");
 
     expect(firstMessage(createPropertySchema, { type: "HOUSE", addressLine: "Main 1" })).toBe("El propietario es obligatorio.");
     expect(firstMessage(createPropertySchema, { ownerId: 42, type: "HOUSE", addressLine: "Main 1" })).toBe("El propietario debe ser texto.");
@@ -35,8 +35,8 @@ describe("Zod validation required messages", () => {
   });
 
   it("keeps required and invalid-type messages distinct for required object bodies", () => {
-    expect(firstMessage(createOwnerSchema, undefined)).toBe("Los datos del propietario son obligatorios.");
-    expect(firstMessage(createOwnerSchema, 42)).toBe("Los datos del propietario no son válidos.");
+    expect(firstMessage(createPersonaSchema, undefined)).toBe("Los datos de la persona son obligatorios.");
+    expect(firstMessage(createPersonaSchema, 42)).toBe("Los datos de la persona no son válidos.");
 
     expect(firstMessage(createTenantSchema, undefined)).toBe("Los datos de la inmobiliaria son obligatorios.");
     expect(firstMessage(createTenantSchema, 42)).toBe("Los datos de la inmobiliaria no son válidos.");
