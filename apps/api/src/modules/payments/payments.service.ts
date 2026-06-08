@@ -25,7 +25,7 @@ export interface RecordRentPaymentDto {
   amount: string;
   currency: Currency;
   paidAt: string;
-  notes?: string;
+  notes?: string | undefined;
 }
 
 export interface RecordTenantBalanceMovementDto {
@@ -33,7 +33,7 @@ export interface RecordTenantBalanceMovementDto {
   paidAmount: string;
   realAmount: string;
   currency: Currency;
-  reason?: string;
+  reason?: string | undefined;
 }
 
 @Injectable()

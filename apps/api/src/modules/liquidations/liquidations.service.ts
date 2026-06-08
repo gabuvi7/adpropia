@@ -135,7 +135,7 @@ export class LiquidationsService {
   }
 
   async computeOwnerSettlementInputs(
-    input: { contractId: string; periodStart?: string; periodEnd?: string }
+    input: { contractId: string; periodStart?: string | undefined; periodEnd?: string | undefined }
   ): Promise<OwnerSettlementInputResult> {
     const { tenantId } = this.contextService.get();
     const contract = (await this.prisma.rentalContract.findUnique({

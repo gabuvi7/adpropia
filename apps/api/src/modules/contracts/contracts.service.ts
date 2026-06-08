@@ -9,13 +9,13 @@ export type ContractRecord = RentalContract;
 
 export interface ContractPropertyInput {
   propertyId: string;
-  monthlyAmount?: string;
+  monthlyAmount?: string | undefined;
 }
 
 export interface CreateContractStructureDto {
   participantPersonaIds: string[];
   properties: ContractPropertyInput[];
-  status?: "DRAFT" | "PENDING_SIGNATURE" | "ACTIVE" | "FINALIZED" | "FINISHED" | "CANCELLED";
+  status?: "DRAFT" | "PENDING_SIGNATURE" | "ACTIVE" | "FINALIZED" | "FINISHED" | "CANCELLED" | undefined;
   startsAt: string;
   endsAt: string;
   monthlyTotalAmount: string;
@@ -23,28 +23,28 @@ export interface CreateContractStructureDto {
   dueDayOfMonth: number;
   adjustmentIndexType: "IPC" | "ICL" | "UVA" | "FIXED" | "CUSTOM";
   adjustmentPeriodMonths: number;
-  nextAdjustmentAt?: string;
+  nextAdjustmentAt?: string | undefined;
   commissionBps: number;
-  previousContractId?: string;
+  previousContractId?: string | undefined;
 }
 
 export interface FinalizeContractEarlyDto {
   finalizedAt: string;
   finalizationReason: "MUTUAL_AGREEMENT" | "TENANT_BREACH" | "OWNER_DECISION" | "OTHER";
-  finalizationDescription?: string;
+  finalizationDescription?: string | undefined;
 }
 
 export interface SalaryReceiptGuaranteeInput {
   employerName: string;
   employeeName: string;
-  employeeTaxId?: string;
-  monthlyIncome?: string;
-  employmentDate?: string;
+  employeeTaxId?: string | undefined;
+  monthlyIncome?: string | undefined;
+  employmentDate?: string | undefined;
 }
 
 export interface PropertyBackedTitleHolderInput {
   fullName: string;
-  taxId?: string;
+  taxId?: string | undefined;
   signsGuarantee: boolean;
 }
 
@@ -53,43 +53,43 @@ export interface PropertyBackedGuaranteeInput {
   registrationNumber: string;
   registrationLocality: string;
   propertyAddress: string;
-  propertyCity?: string;
-  propertyProvince?: string;
+  propertyCity?: string | undefined;
+  propertyProvince?: string | undefined;
   titleHolders: PropertyBackedTitleHolderInput[];
 }
 
 export interface SuretyGuaranteeInput {
   companyName: string;
   policyNumber: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  coverageAmount?: string;
+  contactName?: string | undefined;
+  contactEmail?: string | undefined;
+  contactPhone?: string | undefined;
+  coverageAmount?: string | undefined;
 }
 
 export interface RegisterContractGuaranteeDto {
   type: "SALARY_RECEIPT" | "PROPERTY_BACKED" | "SURETY";
-  state?: "ACTIVE" | "RELEASED" | "EXPIRED";
-  startsAt?: string;
-  endsAt?: string;
-  notes?: string;
-  salaryReceipt?: SalaryReceiptGuaranteeInput;
-  propertyBacked?: PropertyBackedGuaranteeInput;
-  surety?: SuretyGuaranteeInput;
+  state?: "ACTIVE" | "RELEASED" | "EXPIRED" | undefined;
+  startsAt?: string | undefined;
+  endsAt?: string | undefined;
+  notes?: string | undefined;
+  salaryReceipt?: SalaryReceiptGuaranteeInput | undefined;
+  propertyBacked?: PropertyBackedGuaranteeInput | undefined;
+  surety?: SuretyGuaranteeInput | undefined;
 }
 
 export interface DefineContractDepositDto {
   amount: string;
   currency: "ARS" | "USD";
-  receivedAt?: string;
-  notes?: string;
+  receivedAt?: string | undefined;
+  notes?: string | undefined;
 }
 
 export interface ActivateContractScheduleDto {
   activatedAt: string;
-  estimatedAmount?: string;
-  estimatedIndexValue?: string;
-  estimatedIndexSource?: string;
+  estimatedAmount?: string | undefined;
+  estimatedIndexValue?: string | undefined;
+  estimatedIndexSource?: string | undefined;
 }
 
 @Injectable()
@@ -134,6 +134,7 @@ export class ContractsService {
     await this.ensurePropertiesBelongToTenant(propertyIds, tenantId);
     await this.ensurePersonasBelongToTenant(input.participantPersonaIds, tenantId);
     await this.ensureContractPropertiesShareOwnership(propertyIds, tenantId);
+    await this.ensurePreviousContractBelongsToTenant(input.previousContractId, tenantId);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -444,6 +445,17 @@ export class ContractsService {
     const [firstSignature, ...remainingSignatures] = ownershipSignatures;
     if (!firstSignature || remainingSignatures.some((signature) => signature !== firstSignature)) {
       throw new BadRequestException("Todas las propiedades del contrato deben compartir el mismo grupo de propietarios y porcentajes de titularidad.");
+    }
+  }
+
+  private async ensurePreviousContractBelongsToTenant(previousContractId: string | undefined, tenantId: string): Promise<void> {
+    if (previousContractId === undefined) {
+      return;
+    }
+
+    const previousContract = await this.findContract(previousContractId, tenantId);
+    if (!previousContract) {
+      throw new BadRequestException("El contrato anterior no existe para esta inmobiliaria.");
     }
   }
 }

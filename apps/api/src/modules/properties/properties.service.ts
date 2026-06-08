@@ -16,20 +16,20 @@ export interface PropertyOwnerParticipationDto {
 
 export interface PropertyServiceLinkDto {
   serviceTypeId: string;
-  accountNumber?: string;
+  accountNumber?: string | undefined;
 }
 
 export interface CreatePropertyUnitDto {
   propertyTypeId: string;
   addressLine: string;
-  status?: "AVAILABLE" | "RENTED" | "INACTIVE";
-  buildingName?: string;
-  city?: string;
-  province?: string;
-  postalCode?: string;
-  commissionBps?: number;
+  status?: "AVAILABLE" | "RENTED" | "INACTIVE" | undefined;
+  buildingName?: string | undefined;
+  city?: string | undefined;
+  province?: string | undefined;
+  postalCode?: string | undefined;
+  commissionBps?: number | undefined;
   owners: PropertyOwnerParticipationDto[];
-  services?: PropertyServiceLinkDto[];
+  services?: PropertyServiceLinkDto[] | undefined;
 }
 
 @Injectable()

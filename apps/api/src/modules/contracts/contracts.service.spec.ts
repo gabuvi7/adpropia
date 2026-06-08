@@ -229,6 +229,32 @@ describe("ContractsService", () => {
     expect(prisma.rentalContract.create).not.toHaveBeenCalled();
   });
 
+  it("rejects structured contracts when the previous contract does not exist for the active tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst)
+      .mockResolvedValueOnce({ id: "property-1", tenantId: "tenant-a" } as never)
+      .mockResolvedValueOnce({ id: "property-2", tenantId: "tenant-a" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "tenant-persona-1" }, { id: "tenant-persona-2" }] as never);
+    vi.mocked(prisma.propertyOwner.findMany)
+      .mockResolvedValueOnce([
+        { personaId: "owner-a", ownershipShareBps: 7000 },
+        { personaId: "owner-b", ownershipShareBps: 3000 }
+      ] as never)
+      .mockResolvedValueOnce([
+        { personaId: "owner-a", ownershipShareBps: 7000 },
+        { personaId: "owner-b", ownershipShareBps: 3000 }
+      ] as never);
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(null as never);
+    const service = new ContractsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expect(service.createContractStructure(contractStructureInput)).rejects.toThrow("El contrato anterior no existe para esta inmobiliaria.");
+
+    expect(prisma.rentalContract.findUnique).toHaveBeenCalledWith({
+      where: { id_tenantId: { id: "contract-previous", tenantId: "tenant-a" } }
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("creates structured contracts with multiple tenants, multiple properties, lifecycle data, and no tenant liability percentages", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.property.findFirst)
@@ -244,6 +270,7 @@ describe("ContractsService", () => {
         { personaId: "owner-a", ownershipShareBps: 7000 },
         { personaId: "owner-b", ownershipShareBps: 3000 }
       ] as never);
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ id: "contract-previous", tenantId: "tenant-a" } as never);
     const tx = {
       rentalContract: { create: vi.fn().mockResolvedValue({ id: "contract-1", tenantId: "tenant-a" } as never) },
       contractParticipant: { createMany: vi.fn().mockResolvedValue({ count: 2 } as never) },
