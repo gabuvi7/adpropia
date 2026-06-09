@@ -1,9 +1,12 @@
 import { UnauthorizedException } from "@nestjs/common";
+import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import { describe, expect, it, vi } from "vitest";
 import { Auth0TenantResolver, type Auth0JwtClaims } from "./auth0-tenant-resolver";
 import { Auth0JwtMiddleware } from "./auth0-jwt.middleware";
 import type { Auth0JwtService } from "./auth0-jwt.service";
+import { Auth0JwtService as Auth0JwtServiceToken } from "./auth0-jwt.service";
 import type { RequestContextService } from "../request-context/request-context.service";
+import { RequestContextService as RequestContextServiceToken } from "../request-context/request-context.service";
 
 function createJwtServiceMock(claims?: Auth0JwtClaims): Auth0JwtService {
   return {
@@ -46,6 +49,19 @@ function createRequest(authHeader?: string): { headers: Record<string, string | 
 }
 
 describe("Auth0JwtMiddleware", () => {
+  it("declares explicit injection tokens for Nest middleware DI", () => {
+    const dependencies = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, Auth0JwtMiddleware) as Array<{
+      index: number;
+      param: unknown;
+    }>;
+
+    expect(dependencies).toEqual(expect.arrayContaining([
+      { index: 0, param: Auth0JwtServiceToken },
+      { index: 1, param: RequestContextServiceToken },
+      { index: 2, param: Auth0TenantResolver }
+    ]));
+  });
+
   it("validates JWT and resolves tenant, populates context", async () => {
     const jwtService = createJwtServiceMock();
     const ctxService = createContextServiceMock();
@@ -113,6 +129,17 @@ describe("Auth0JwtMiddleware", () => {
     const req = createRequest("Bearer bad-token");
 
     await expect(middleware.use(req, undefined, vi.fn())).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("keeps safe JWT verification failure details in non-production", async () => {
+    const jwtService = createJwtServiceErrorMock();
+    const ctxService = createContextServiceMock();
+    const resolver = createTenantResolverMock();
+    const middleware = new Auth0JwtMiddleware(jwtService, ctxService, resolver);
+
+    const req = createRequest("Bearer bad-token");
+
+    await expect(middleware.use(req, undefined, vi.fn())).rejects.toThrow("Token invalido. Detalle: Invalid token");
   });
 
   it("throws when tenant resolution fails", async () => {
