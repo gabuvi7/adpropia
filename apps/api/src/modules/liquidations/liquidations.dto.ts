@@ -139,6 +139,7 @@ export const listLiquidationsQuerySchema = z
 export const updateLiquidationDraftSchema = z.object({
   notes: z
     .string({ error: "Las observaciones deben ser texto." })
+    .trim()
     .max(2000, "Las observaciones no pueden superar los 2000 caracteres.")
     .optional()
 });
@@ -151,6 +152,7 @@ export const changeLiquidationStatusSchema = z.object({
   status: liquidationStatusSchema,
   voidReason: z
     .string({ error: "El motivo de anulación debe ser texto." })
+    .trim()
     .min(1, "Es necesario indicar un motivo de anulación.")
     .max(500, "El motivo de anulación no puede superar los 500 caracteres.")
     .optional()
