@@ -368,6 +368,53 @@ describe("LiquidationsService — computeOwnerSettlementInputs", () => {
     ).rejects.toThrow("No se puede liquidar un período estimado sin monto real reconciliado.");
   });
 
+  it("loads the contract by id and tenant, and applies optional rent period date bounds", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, [{ personaId: "owner-persona-1", ownershipShareBps: 10000 }]);
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
+    const service = buildService(prisma, createContextMock({ tenantId: "tenant-scoped" }));
+
+    await service.computeOwnerSettlementInputs({
+      contractId: "contract-1",
+      periodStart: "2026-04-01T00:00:00.000Z",
+      periodEnd: "2026-04-30T23:59:59.999Z"
+    });
+
+    expect(prisma.rentalContract.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id_tenantId: { id: "contract-1", tenantId: "tenant-scoped" } }
+      })
+    );
+    expect(prisma.rentPeriod.findMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: "tenant-scoped",
+        contractId: "contract-1",
+        periodStart: { gte: new Date("2026-04-01T00:00:00.000Z") },
+        periodEnd: { lte: new Date("2026-04-30T23:59:59.999Z") }
+      },
+      orderBy: [{ periodStart: "asc" }, { id: "asc" }]
+    });
+  });
+
+  it("rejects when the scoped contract does not exist", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(null as never);
+    const service = buildService(prisma, createContextMock({ tenantId: "tenant-other" }));
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "missing-contract" })).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+    await expect(service.computeOwnerSettlementInputs({ contractId: "missing-contract" })).rejects.toThrow(
+      "No encontramos el contrato solicitado."
+    );
+    expect(prisma.rentPeriod.findMany).not.toHaveBeenCalled();
+    expect(prisma.rentalContract.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id_tenantId: { id: "missing-contract", tenantId: "tenant-other" } }
+      })
+    );
+  });
+
   it("loads contract commission, real rent periods, and property ownership shares for multiple owners", async () => {
     const prisma = createPrismaMock();
     mockSettlementContract(prisma, [
@@ -411,6 +458,34 @@ describe("LiquidationsService — computeOwnerSettlementInputs", () => {
     );
   });
 
+  it("rejects owner shares that do not add up to 100%", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, [{ personaId: "owner-persona-1", ownershipShareBps: 9000 }]);
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
+      "La participación de propietarios debe sumar 100%."
+    );
+  });
+
+  it("rejects reconciled rent periods without real amount", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(prisma, [{ personaId: "owner-persona-1", ownershipShareBps: 10000 }]);
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: null }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
+      "No se puede liquidar un período estimado sin monto real reconciliado."
+    );
+  });
+
   it("rejects contract commissions outside 0% to 100%", async () => {
     const prisma = createPrismaMock();
     mockSettlementContract(
@@ -421,6 +496,24 @@ describe("LiquidationsService — computeOwnerSettlementInputs", () => {
     mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
     const service = buildService(prisma, createContextMock());
 
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
+      "La comisión del contrato debe estar entre 0% y 100%."
+    );
+  });
+
+  it("rejects negative contract commissions", async () => {
+    const prisma = createPrismaMock();
+    mockSettlementContract(
+      prisma,
+      [{ personaId: "owner-persona-1", ownershipShareBps: 10000 }],
+      { commissionBps: -1 }
+    );
+    mockSettlementPeriods(prisma, [{ calculationState: "RECONCILED", realAmount: "100000.00" }]);
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toBeInstanceOf(
+      BadRequestException
+    );
     await expect(service.computeOwnerSettlementInputs({ contractId: "contract-1" })).rejects.toThrow(
       "La comisión del contrato debe estar entre 0% y 100%."
     );
@@ -498,10 +591,12 @@ describe("LiquidationsService — createLiquidation", () => {
 
     expect(result.id).toBe("liq-new");
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.liquidationLineItem.createMany).not.toHaveBeenCalled();
   });
 
   it("crea Liquidation DRAFT + line items + adjustments en una transacción", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     mockOwnerFound(prisma);
     mockTenantSettings(prisma, 0);
     mockProperties(prisma, [{ id: "prop-1", commissionBps: 1000 }]);
@@ -519,7 +614,7 @@ describe("LiquidationsService — createLiquidation", () => {
       manualAdjustments: []
     });
 
-    const service = buildService(prisma, createContextMock());
+    const service = buildService(prisma, createContextMock(), { audit });
     const adjustments = [{ concept: "Bonificación", amount: "5000.00", sign: "CREDIT" as const }];
 
     await service.createLiquidation({ ...createInput, manualAdjustments: adjustments, notes: "Liquidación abril" });
@@ -571,6 +666,23 @@ describe("LiquidationsService — createLiquidation", () => {
         })
       ]
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tenantId: "tenant-a" }),
+      {
+        entityType: "liquidation",
+        entityId: "liq-1",
+        action: "liquidation.created",
+        metadata: {
+          ownerId: "owner-1",
+          periodStart: "2026-04-01T00:00:00.000Z",
+          periodEnd: "2026-04-30T23:59:59.999Z",
+          currency: "ARS",
+          lineItemsCount: 1,
+          adjustmentsCount: 1
+        }
+      }
+    );
   });
 
   it("createdById queda null si no hay userId en el contexto", async () => {
@@ -613,6 +725,35 @@ describe("LiquidationsService — createLiquidation", () => {
     );
   });
 
+  it("usa defaults cuando manualAdjustments y notes no vienen en el input", async () => {
+    const prisma = createPrismaMock();
+    mockOwnerFound(prisma);
+    mockTenantSettings(prisma, 0);
+    mockProperties(prisma, [{ id: "prop-1", commissionBps: 0 }]);
+    vi.mocked(prisma.payment.findMany).mockResolvedValue([
+      buildPrismaPayment({ paidAmount: "100000.00", dueAmount: "100000.00" })
+    ] as never);
+    vi.mocked(prisma.liquidation.findFirst).mockResolvedValue(null as never);
+    const { tx } = mockTransactionPassthrough(prisma);
+    tx.liquidation.create.mockResolvedValue({ id: "liq-defaults", lineItems: [], manualAdjustments: [] });
+    const service = buildService(prisma, createContextMock());
+    const inputWithoutDefaults = {
+      ownerId: createInput.ownerId,
+      periodStart: createInput.periodStart,
+      periodEnd: createInput.periodEnd,
+      currency: createInput.currency
+    } as unknown as Parameters<LiquidationsService["createLiquidation"]>[0];
+
+    await service.createLiquidation(inputWithoutDefaults);
+
+    expect(tx.liquidationManualAdjustment.createMany).not.toHaveBeenCalled();
+    expect(tx.liquidation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ notes: expect.anything() })
+      })
+    );
+  });
+
   it("mapea unique constraint de carrera (P2002) a ConflictException con el mismo mensaje", async () => {
     const prisma = createPrismaMock();
     mockOwnerFound(prisma);
@@ -630,6 +771,40 @@ describe("LiquidationsService — createLiquidation", () => {
     await expect(service.createLiquidation(createInput)).rejects.toThrow(
       "Ya existe una liquidación activa para este propietario, período y moneda."
     );
+  });
+
+  it("mapea errores inesperados de la transaction a BadRequest con mensaje de dominio", async () => {
+    const prisma = createPrismaMock();
+    mockOwnerFound(prisma);
+    mockTenantSettings(prisma, 0);
+    mockProperties(prisma, []);
+    vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.liquidation.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockRejectedValue(
+      new Error("database unavailable")
+    );
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.createLiquidation(createInput)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createLiquidation(createInput)).rejects.toThrow(
+      "No pudimos crear la liquidación. Revisá los datos enviados."
+    );
+  });
+
+  it("preserva BadRequestException originadas dentro de la transaction", async () => {
+    const prisma = createPrismaMock();
+    mockOwnerFound(prisma);
+    mockTenantSettings(prisma, 0);
+    mockProperties(prisma, []);
+    vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.liquidation.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockRejectedValue(
+      new BadRequestException("Error de dominio interno.")
+    );
+    const service = buildService(prisma, createContextMock());
+
+    await expect(service.createLiquidation(createInput)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createLiquidation(createInput)).rejects.toThrow("Error de dominio interno.");
   });
 
   it("scopea todas las queries por tenant del contexto", async () => {
@@ -1066,6 +1241,16 @@ describe("LiquidationsService — changeStatus (DRAFT → ISSUED)", () => {
     await service.changeStatus("liq-1", { status: "ISSUED" });
 
     expect(renderer.render).toHaveBeenCalledTimes(1);
+    expect(renderer.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "ISSUED",
+        tenant: expect.objectContaining({
+          commercialName: "Inmobiliaria Demo SRL",
+          legalIdentity: { taxId: "30-12345678-9", licenseNumber: "Mat-001" }
+        }),
+        owner: expect.objectContaining({ displayName: "Propietario Uno" })
+      })
+    );
     expect(storage.save).toHaveBeenCalledTimes(1);
 
     const expectedKey = "tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf";
@@ -1905,6 +2090,14 @@ describe("LiquidationsService — getOrGeneratePdf", () => {
 
     expect(renderer.render).not.toHaveBeenCalled();
     expect(storage.save).not.toHaveBeenCalled();
+    expect(prisma.document.findFirst).toHaveBeenCalledWith({
+      where: {
+        tenantId: "tenant-a",
+        entityType: "Liquidation",
+        entityId: "liq-1",
+        type: "LIQUIDATION"
+      }
+    });
     expect(storage.read).toHaveBeenCalledWith("tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf");
     expect(result.filename).toBe("liquidacion-liq-1.pdf");
     expect(result.mimeType).toBe("application/pdf");
@@ -1994,10 +2187,75 @@ describe("LiquidationsService — getOrGeneratePdf", () => {
         entityId: "liq-1",
         fileName: "liquidacion-liq-1.pdf",
         mimeType: "application/pdf",
-        storageKey: "tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf"
+        storageKey: "tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf",
+        createdById: "user-1"
       })
     });
     expect(result.filename).toBe("liquidacion-liq-1.pdf");
+    expect(result.mimeType).toBe("application/pdf");
+  });
+
+  it("ISSUED sin Document y userId null: crea Document con createdById null", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.liquidation.findUnique).mockResolvedValue(
+      makeLiquidation({ status: "ISSUED" }) as never
+    );
+    vi.mocked(prisma.document.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.document.create).mockResolvedValue({ id: "doc-new" } as never);
+    mockTenantContext(prisma);
+
+    const service = buildService(prisma, createContextMock({ userId: null }), {
+      renderer: createRendererMock(),
+      storage: createStorageMock()
+    });
+
+    await service.getOrGeneratePdf("liq-1");
+
+    expect(prisma.document.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ createdById: null })
+    });
+  });
+
+  it("ISSUED sin Document: ignora P2002 al crear Document y devuelve el PDF generado", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.liquidation.findUnique).mockResolvedValue(
+      makeLiquidation({ status: "ISSUED" }) as never
+    );
+    vi.mocked(prisma.document.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.document.create).mockRejectedValue({ code: "P2002" } as never);
+    mockTenantContext(prisma);
+
+    const storage = createStorageMock();
+    storage.read.mockResolvedValue(Readable.from(Buffer.from("GENERATED")));
+    const service = buildService(prisma, createContextMock(), { renderer: createRendererMock(), storage });
+
+    const result = await service.getOrGeneratePdf("liq-1");
+
+    expect(result.filename).toBe("liquidacion-liq-1.pdf");
+    expect(storage.save).toHaveBeenCalledWith(
+      "tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf",
+      expect.anything()
+    );
+    expect(storage.read).toHaveBeenCalledWith("tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf");
+  });
+
+  it("ISSUED sin Document: propaga errores no únicos al crear Document", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.liquidation.findUnique).mockResolvedValue(
+      makeLiquidation({ status: "ISSUED" }) as never
+    );
+    vi.mocked(prisma.document.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.document.create).mockRejectedValue(new Error("document table down") as never);
+    mockTenantContext(prisma);
+
+    const storage = createStorageMock();
+    const service = buildService(prisma, createContextMock(), { renderer: createRendererMock(), storage });
+
+    await expect(service.getOrGeneratePdf("liq-1")).rejects.toThrow("document table down");
+    expect(storage.save).toHaveBeenCalledWith(
+      "tenant-a/liquidations/liq-1/liquidacion-liq-1.pdf",
+      expect.anything()
+    );
   });
 
   it("PAID con Document presente: devuelve stream", async () => {

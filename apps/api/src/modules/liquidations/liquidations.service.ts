@@ -238,7 +238,7 @@ export class LiquidationsService {
         periodStart,
         periodEnd,
         currency: input.currency,
-        status: { in: ["DRAFT", "ISSUED", "PAID"] }
+        status: { in: [...ACTIVE_STATUSES] }
       }
     });
 
