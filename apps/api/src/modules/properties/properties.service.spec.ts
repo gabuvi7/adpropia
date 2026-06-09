@@ -1,3 +1,4 @@
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
@@ -58,6 +59,18 @@ function mockTransaction(prisma: PrismaService, tx: unknown) {
   );
 }
 
+async function expectHttpException(
+  promise: Promise<unknown>,
+  exceptionClass: typeof BadRequestException | typeof NotFoundException,
+  statusCode: number,
+  message: string
+) {
+  await expect(promise).rejects.toBeInstanceOf(exceptionClass);
+  await expect(promise).rejects.toMatchObject({
+    response: expect.objectContaining({ statusCode, message })
+  });
+}
+
 describe("PropertiesService", () => {
   it("checks owner id and active tenantId before creating properties", async () => {
     const prisma = createPrismaMock();
@@ -71,13 +84,46 @@ describe("PropertiesService", () => {
 
     expect(prisma.owner.findFirst).toHaveBeenCalledWith({ where: { id: "owner-1", tenantId: "tenant-a", deletedAt: null } });
     expect(tx.property.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ tenantId: "tenant-a", ownerId: "owner-1", type: "APARTMENT", addressLine: "Av. Siempre Viva 123" })
+      data: { tenantId: "tenant-a", ownerId: "owner-1", type: "APARTMENT", addressLine: "Av. Siempre Viva 123" }
     });
     expect(audit.createEntryWithClient).toHaveBeenCalledWith(tx, expect.objectContaining({ tenantId: "tenant-a" }), {
       entityType: "property",
       entityId: "property-1",
       action: "property.created",
       metadata: { ownerId: "owner-1" }
+    });
+  });
+
+  it("persists provided property creation fields and omits fields not provided", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.owner.findFirst).mockResolvedValue({ id: "owner-1", tenantId: "tenant-a" } as never);
+    const tx = { property: { create: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-a", ownerId: "owner-1" } as never) } };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.createProperty({
+      ownerId: "owner-1",
+      type: "HOUSE",
+      status: "RENTED",
+      addressLine: "Av. Pellegrini 1500",
+      city: "Rosario",
+      province: "Santa Fe",
+      postalCode: "2000",
+      commissionBps: 450
+    });
+
+    expect(tx.property.create).toHaveBeenCalledWith({
+      data: {
+        tenantId: "tenant-a",
+        ownerId: "owner-1",
+        type: "HOUSE",
+        status: "RENTED",
+        addressLine: "Av. Pellegrini 1500",
+        city: "Rosario",
+        province: "Santa Fe",
+        postalCode: "2000",
+        commissionBps: 450
+      }
     });
   });
 
@@ -104,6 +150,42 @@ describe("PropertiesService", () => {
     expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-c", deletedAt: null } });
   });
 
+  it("throws NotFound when the requested property is missing for the active tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue(null as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-c"), createAuditMock());
+
+    await expectHttpException(service.getPropertyById("property-1"), NotFoundException, 404, "No encontramos la propiedad solicitada.");
+
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-c", deletedAt: null } });
+  });
+
+  it("finds tenant-scoped properties through the compatibility lookup", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-scope" } as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-scope"), createAuditMock());
+
+    await expect(service.findPropertyForTenant("property-1")).resolves.toEqual({ id: "property-1", tenantId: "tenant-scope" });
+
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-scope", deletedAt: null } });
+  });
+
+  it("rejects property creation when the owner is missing, inactive, or from another tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.owner.findFirst).mockResolvedValue(null as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.createProperty({ ownerId: "owner-other", type: "APARTMENT", addressLine: "Av. Siempre Viva 123" }),
+      BadRequestException,
+      400,
+      "El propietario indicado no existe en esta inmobiliaria."
+    );
+
+    expect(prisma.owner.findFirst).toHaveBeenCalledWith({ where: { id: "owner-other", tenantId: "tenant-a", deletedAt: null } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("updates properties with compound id_tenantId after checking active tenantId", async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
@@ -124,6 +206,44 @@ describe("PropertiesService", () => {
       entityId: "property-1",
       action: "property.updated",
       metadata: { changedFields: ["addressLine"] }
+    });
+  });
+
+  it("throws NotFound before updating when the property is not active for the tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue(null as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-d"), createAuditMock());
+
+    await expectHttpException(
+      service.updateProperty("property-missing", { addressLine: "Nueva dirección" }),
+      NotFoundException,
+      404,
+      "No encontramos la propiedad solicitada."
+    );
+
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-missing", tenantId: "tenant-d", deletedAt: null } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("persists provided property update fields and omits fields not provided", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-d", ownerId: "owner-1" } as never);
+    const tx = { property: { update: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-d" } as never) } };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-d"), createAuditMock());
+
+    await service.updateProperty("property-1", {
+      type: "HOUSE",
+      status: "RENTED",
+      city: "Rosario",
+      province: "Santa Fe",
+      postalCode: "2000",
+      commissionBps: 550
+    });
+
+    expect(tx.property.update).toHaveBeenCalledWith({
+      where: { id_tenantId: { id: "property-1", tenantId: "tenant-d" } },
+      data: { type: "HOUSE", status: "RENTED", city: "Rosario", province: "Santa Fe", postalCode: "2000", commissionBps: 550 }
     });
   });
 
@@ -204,6 +324,17 @@ describe("PropertiesService", () => {
     ).rejects.toThrow("La participación de los propietarios debe sumar 100%.");
   });
 
+  it("rejects ownership participation when no owners are provided", async () => {
+    const service = new PropertiesService(createPrismaMock(), createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.updatePropertyOwnership("property-1", []),
+      BadRequestException,
+      400,
+      "La participación de los propietarios debe sumar 100%."
+    );
+  });
+
   it("blocks ownership changes while an active contract references the property", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never);
@@ -215,6 +346,86 @@ describe("PropertiesService", () => {
     );
 
     expect(prisma.rentalContract.count).toHaveBeenCalledWith({ where: { tenantId: "tenant-a", propertyId: "property-1", status: "ACTIVE" } });
+  });
+
+  it("throws NotFound before changing ownership when the property is not active for the tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue(null as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.updatePropertyOwnership("property-missing", [{ personaId: "persona-1", ownershipShareBps: 10000 }]),
+      NotFoundException,
+      404,
+      "No encontramos la propiedad solicitada."
+    );
+
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-missing", tenantId: "tenant-a", deletedAt: null } });
+    expect(prisma.rentalContract.count).not.toHaveBeenCalled();
+  });
+
+  it("replaces ownership in a transaction and audits the new owners", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never);
+    vi.mocked(prisma.rentalContract.count).mockResolvedValue(0 as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }, { id: "persona-2" }] as never);
+    const tx = {
+      propertyOwner: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 2 } as never),
+        createMany: vi.fn().mockResolvedValue({ count: 2 } as never)
+      }
+    };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), audit);
+
+    await service.updatePropertyOwnership("property-1", [
+      { personaId: "persona-1", ownershipShareBps: 6000 },
+      { personaId: "persona-2", ownershipShareBps: 4000 }
+    ]);
+
+    expect(prisma.rentalContract.count).toHaveBeenCalledWith({ where: { tenantId: "tenant-a", propertyId: "property-1", status: "ACTIVE" } });
+    expect(prisma.persona.findMany).toHaveBeenCalledWith({
+      where: { tenantId: "tenant-a", id: { in: ["persona-1", "persona-2"] }, deletedAt: null },
+      select: { id: true }
+    });
+    expect(tx.propertyOwner.deleteMany).toHaveBeenCalledWith({ where: { tenantId: "tenant-a", propertyId: "property-1" } });
+    expect(tx.propertyOwner.createMany).toHaveBeenCalledWith({
+      data: [
+        { tenantId: "tenant-a", propertyId: "property-1", personaId: "persona-1", ownershipShareBps: 6000 },
+        { tenantId: "tenant-a", propertyId: "property-1", personaId: "persona-2", ownershipShareBps: 4000 }
+      ]
+    });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(tx, expect.objectContaining({ tenantId: "tenant-a" }), {
+      entityType: "property",
+      entityId: "property-1",
+      action: "property.ownership_updated",
+      metadata: { ownerPersonaIds: ["persona-1", "persona-2"] }
+    });
+  });
+
+  it("wraps ownership transaction failures in the public Spanish BadRequest message", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never);
+    vi.mocked(prisma.rentalContract.count).mockResolvedValue(0 as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }] as never);
+    const tx = {
+      propertyOwner: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 } as never),
+        createMany: vi.fn().mockRejectedValue(new Error("database failed"))
+      }
+    };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.updatePropertyOwnership("property-1", [{ personaId: "persona-1", ownershipShareBps: 10000 }]),
+      BadRequestException,
+      400,
+      "No pudimos actualizar los propietarios de la propiedad. Revisá los datos enviados."
+    );
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
   });
 
   it("persists Persona ownership and service links for a rentable unit", async () => {
@@ -234,6 +445,12 @@ describe("PropertiesService", () => {
     await service.createPropertyUnit({
       propertyTypeId: "type-apartment",
       addressLine: "Av. Belgrano 100",
+      status: "AVAILABLE",
+      buildingName: "Torre Norte",
+      city: "Córdoba",
+      province: "Córdoba",
+      postalCode: "5000",
+      commissionBps: 650,
       owners: [
         { personaId: "persona-1", ownershipShareBps: 7000 },
         { personaId: "persona-2", ownershipShareBps: 3000 }
@@ -245,7 +462,18 @@ describe("PropertiesService", () => {
     });
 
     expect(tx.property.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ tenantId: "tenant-a", propertyTypeId: "type-apartment", addressLine: "Av. Belgrano 100" })
+      data: {
+        tenantId: "tenant-a",
+        propertyTypeId: "type-apartment",
+        type: "APARTMENT",
+        addressLine: "Av. Belgrano 100",
+        status: "AVAILABLE",
+        buildingName: "Torre Norte",
+        city: "Córdoba",
+        province: "Córdoba",
+        postalCode: "5000",
+        commissionBps: 650
+      }
     });
     expect(tx.propertyOwner.createMany).toHaveBeenCalledWith({
       data: [
@@ -259,5 +487,162 @@ describe("PropertiesService", () => {
         { tenantId: "tenant-a", propertyId: "property-1", serviceTypeId: "service-electricity", accountNumber: null }
       ]
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(tx, expect.objectContaining({ tenantId: "tenant-a" }), {
+      entityType: "property",
+      entityId: "property-1",
+      action: "property.created",
+      metadata: { ownerPersonaIds: ["persona-1", "persona-2"], serviceTypeIds: ["service-gas", "service-electricity"] }
+    });
+  });
+
+  it("does not create service links when a unit has no services", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue({ id: "type-house", code: "HOUSE" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }] as never);
+    const tx = {
+      property: { create: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never) },
+      propertyOwner: { createMany: vi.fn().mockResolvedValue({ count: 1 } as never) },
+      propertyService: { createMany: vi.fn() }
+    };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), audit);
+
+    await service.createPropertyUnit({
+      propertyTypeId: "type-house",
+      addressLine: "San Martín 42",
+      owners: [{ personaId: "persona-1", ownershipShareBps: 10000 }]
+    });
+
+    expect(prisma.serviceType.findMany).not.toHaveBeenCalled();
+    expect(tx.property.create).toHaveBeenCalledWith({
+      data: { tenantId: "tenant-a", propertyTypeId: "type-house", type: "HOUSE", addressLine: "San Martín 42" }
+    });
+    expect(tx.propertyService.createMany).not.toHaveBeenCalled();
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(tx, expect.objectContaining({ tenantId: "tenant-a" }), {
+      entityType: "property",
+      entityId: "property-1",
+      action: "property.created",
+      metadata: { ownerPersonaIds: ["persona-1"], serviceTypeIds: [] }
+    });
+  });
+
+  it("rejects units when the property type is missing, inactive, or has an unsupported code", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue(null as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.createPropertyUnit({
+        propertyTypeId: "type-missing",
+        addressLine: "San Martín 42",
+        owners: [{ personaId: "persona-1", ownershipShareBps: 10000 }]
+      }),
+      BadRequestException,
+      400,
+      "El tipo de propiedad indicado no existe."
+    );
+
+    expect(prisma.propertyTypeCatalog.findFirst).toHaveBeenCalledWith({ where: { id: "type-missing", isActive: true }, select: { code: true } });
+    expect(prisma.persona.findMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects units when the property type catalog code is unsupported", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue({ code: "WAREHOUSE" } as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.createPropertyUnit({
+        propertyTypeId: "type-unsupported",
+        addressLine: "San Martín 42",
+        owners: [{ personaId: "persona-1", ownershipShareBps: 10000 }]
+      }),
+      BadRequestException,
+      400,
+      "El tipo de propiedad indicado no existe."
+    );
+
+    expect(prisma.persona.findMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects units when an owner persona is inactive, missing, or from another tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue({ code: "APARTMENT" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }] as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.createPropertyUnit({
+        propertyTypeId: "type-apartment",
+        addressLine: "San Martín 42",
+        owners: [
+          { personaId: "persona-1", ownershipShareBps: 5000 },
+          { personaId: "persona-other", ownershipShareBps: 5000 }
+        ]
+      }),
+      BadRequestException,
+      400,
+      "Todos los propietarios deben pertenecer a esta inmobiliaria."
+    );
+
+    expect(prisma.persona.findMany).toHaveBeenCalledWith({
+      where: { tenantId: "tenant-a", id: { in: ["persona-1", "persona-other"] }, deletedAt: null },
+      select: { id: true }
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects units when a service type is missing or inactive", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue({ code: "APARTMENT" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }] as never);
+    vi.mocked(prisma.serviceType.findMany).mockResolvedValue([{ id: "service-gas" }] as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      service.createPropertyUnit({
+        propertyTypeId: "type-apartment",
+        addressLine: "San Martín 42",
+        owners: [{ personaId: "persona-1", ownershipShareBps: 10000 }],
+        services: [{ serviceTypeId: "service-gas" }, { serviceTypeId: "service-missing" }]
+      }),
+      BadRequestException,
+      400,
+      "Todos los servicios indicados deben existir en el catálogo global."
+    );
+
+    expect(prisma.serviceType.findMany).toHaveBeenCalledWith({ where: { id: { in: ["service-gas", "service-missing"] }, isActive: true }, select: { id: true } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("wraps unit creation transaction failures in the public Spanish BadRequest message", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.propertyTypeCatalog.findFirst).mockResolvedValue({ code: "APARTMENT" } as never);
+    vi.mocked(prisma.persona.findMany).mockResolvedValue([{ id: "persona-1" }] as never);
+    vi.mocked(audit.createEntryWithClient).mockRejectedValue(new Error("audit failed"));
+    const tx = {
+      property: { create: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-a" } as never) },
+      propertyOwner: { createMany: vi.fn().mockResolvedValue({ count: 1 } as never) },
+      propertyService: { createMany: vi.fn() }
+    };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-a"), audit);
+
+    await expectHttpException(
+      service.createPropertyUnit({
+        propertyTypeId: "type-apartment",
+        addressLine: "San Martín 42",
+        owners: [{ personaId: "persona-1", ownershipShareBps: 10000 }]
+      }),
+      BadRequestException,
+      400,
+      "No pudimos crear la unidad funcional. Revisá los datos enviados."
+    );
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
   });
 });
