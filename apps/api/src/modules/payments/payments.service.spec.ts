@@ -54,6 +54,22 @@ function createAuditMock(): AuditService {
   } as unknown as AuditService;
 }
 
+async function expectHttpException(
+  action: () => Promise<unknown>,
+  errorClass: typeof BadRequestException | typeof NotFoundException,
+  status: number,
+  message: string
+) {
+  try {
+    await action();
+    throw new Error("Expected action to reject.");
+  } catch (error) {
+    expect(error).toBeInstanceOf(errorClass);
+    expect((error as { getStatus: () => number }).getStatus()).toBe(status);
+    expect((error as Error).message).toBe(message);
+  }
+}
+
 const baseContract = {
   id: "contract-1",
   tenantId: "tenant-a",
@@ -75,14 +91,28 @@ const createInput = {
 };
 
 describe("PaymentsService.createPayment", () => {
+  it("looks up the contract through the active tenant compound key", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
+    prisma.__tx.payment.create.mockResolvedValue({ id: "payment-tenant", tenantId: "tenant-b" });
+    const service = new PaymentsService(prisma, createContextMock("tenant-b"), createAuditMock());
+
+    await service.createPayment(createInput);
+
+    expect(prisma.rentalContract.findUnique).toHaveBeenCalledWith({
+      where: { id_tenantId: { id: "contract-1", tenantId: "tenant-b" } }
+    });
+  });
+
   it("creates Payment and CashMovement in the same transaction when paidAmount > 0", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
     prisma.__tx.payment.create.mockResolvedValue({ id: "payment-1", tenantId: "tenant-a" });
     prisma.__tx.cashMovement.create.mockResolvedValue({ id: "movement-1", tenantId: "tenant-a" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), audit);
 
-    await service.createPayment(createInput);
+    await service.createPayment({ ...createInput, notes: "Paid in cash." });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.__tx.payment.create).toHaveBeenCalledWith({
@@ -95,7 +125,9 @@ describe("PaymentsService.createPayment", () => {
         paidAmount: "100000.00",
         remainingDebt: "0.00",
         creditBalance: "0.00",
-        currency: "ARS"
+        currency: "ARS",
+        paidAt: new Date("2026-05-09T12:00:00.000Z"),
+        notes: "Paid in cash."
       })
     });
     expect(prisma.__tx.cashMovement.create).toHaveBeenCalledWith({
@@ -106,9 +138,30 @@ describe("PaymentsService.createPayment", () => {
         amount: "100000.00",
         currency: "ARS",
         sourceType: "PAYMENT",
-        sourceId: "payment-1"
+        sourceId: "payment-1",
+        reason: "Paid in cash."
       })
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(prisma.__tx, expect.objectContaining({ tenantId: "tenant-a" }), {
+      entityType: "payment",
+      entityId: "payment-1",
+      action: "payment.created",
+      metadata: { contractId: "contract-1", status: "PAID", currency: "ARS" }
+    });
+  });
+
+  it("wraps transaction failures in the payment registration domain error", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(baseContract as never);
+    vi.mocked(prisma.$transaction).mockRejectedValue(new Error("database unavailable") as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.createPayment(createInput),
+      BadRequestException,
+      400,
+      "No pudimos registrar el pago. Revisá los datos enviados."
+    );
   });
 
   it("creates only the Payment with status PENDING when paidAmount === 0 (no cash movement)", async () => {
@@ -130,7 +183,7 @@ describe("PaymentsService.createPayment", () => {
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(null);
     const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
-    await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
+    await expectHttpException(() => service.createPayment(createInput), BadRequestException, 400, "El contrato indicado no existe en esta inmobiliaria.");
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -139,7 +192,8 @@ describe("PaymentsService.createPayment", () => {
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, status: "CANCELLED" } as never);
     const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
-    await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
+    await expectHttpException(() => service.createPayment(createInput), BadRequestException, 400, "No se pueden registrar pagos sobre un contrato cancelado.");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects when the renterId does not match the contract renter", async () => {
@@ -147,7 +201,8 @@ describe("PaymentsService.createPayment", () => {
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, renterId: "other-renter" } as never);
     const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
-    await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
+    await expectHttpException(() => service.createPayment(createInput), BadRequestException, 400, "El inquilino indicado no corresponde al contrato seleccionado.");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects when the currency does not match the contract currency", async () => {
@@ -155,7 +210,8 @@ describe("PaymentsService.createPayment", () => {
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, currency: "USD" } as never);
     const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
-    await expect(service.createPayment(createInput)).rejects.toBeInstanceOf(BadRequestException);
+    await expectHttpException(() => service.createPayment(createInput), BadRequestException, 400, "La moneda del pago no coincide con la del contrato.");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("derives PARTIAL status and remainingDebt when paidAmount < dueAmount", async () => {
@@ -188,6 +244,7 @@ describe("PaymentsService.createPayment", () => {
 describe("PaymentsService.recordRentPayment", () => {
   it("records early estimated-period payments as ON_ACCOUNT rent payment events with a cash boundary link", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({
       id: "period-1",
       tenantId: "tenant-a",
@@ -200,7 +257,7 @@ describe("PaymentsService.recordRentPayment", () => {
     } as never);
     prisma.__tx.rentPayment.create.mockResolvedValue({ id: "rent-payment-1", tenantId: "tenant-a", rentPeriodId: "period-1" });
     prisma.__tx.cashMovement.create.mockResolvedValue({ id: "cash-movement-1", tenantId: "tenant-a" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), audit);
 
     await service.recordRentPayment({
       rentPeriodId: "period-1",
@@ -230,9 +287,40 @@ describe("PaymentsService.recordRentPayment", () => {
         amount: "100000.00",
         currency: "ARS",
         sourceType: "RENT_PAYMENT",
-        sourceId: "rent-payment-1"
+        sourceId: "rent-payment-1",
+        reason: "Paid before IPC publication."
       })
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(prisma.__tx, expect.objectContaining({ tenantId: "tenant-a" }), {
+      entityType: "rent_payment",
+      entityId: "rent-payment-1",
+      action: "rent_payment.recorded",
+      metadata: { rentPeriodId: "period-1", type: "ON_ACCOUNT", currency: "ARS" }
+    });
+  });
+
+  it("trims rent payment notes and wraps transaction failures in the rent payment domain error", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", calculationState: "RECONCILED", currency: "ARS" } as never);
+    prisma.__tx.rentPayment.create.mockResolvedValue({ id: "rent-payment-3", tenantId: "tenant-a", rentPeriodId: "period-1" });
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await service.recordRentPayment({ rentPeriodId: "period-1", amount: "100000.00", currency: "ARS", paidAt: "2026-05-20T12:00:00.000Z", notes: "  Paid with transfer.  " });
+
+    expect(prisma.__tx.rentPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ notes: "Paid with transfer." })
+    });
+
+    vi.clearAllMocks();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", calculationState: "RECONCILED", currency: "ARS" } as never);
+    vi.mocked(prisma.$transaction).mockRejectedValue(new Error("database unavailable") as never);
+
+    await expectHttpException(
+      () => service.recordRentPayment({ rentPeriodId: "period-1", amount: "100000.00", currency: "ARS", paidAt: "2026-05-20T12:00:00.000Z" }),
+      BadRequestException,
+      400,
+      "No pudimos registrar el pago de alquiler. Revisá los datos enviados."
+    );
   });
 
   it("keeps final-period collection as FINAL rent payment event instead of a boolean paid flag", async () => {
@@ -257,11 +345,41 @@ describe("PaymentsService.recordRentPayment", () => {
     });
     expect(prisma.__tx.rentPayment.create).not.toHaveBeenCalledWith({ data: expect.objectContaining({ paid: true }) });
   });
+
+  it("rejects rent payments for periods outside the active tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue(null);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordRentPayment({ rentPeriodId: "period-x", amount: "100000.00", currency: "ARS", paidAt: "2026-05-05T12:00:00.000Z" }),
+      BadRequestException,
+      400,
+      "El período de alquiler indicado no existe en esta inmobiliaria."
+    );
+    expect(prisma.rentPeriod.findUnique).toHaveBeenCalledWith({ where: { id_tenantId: { id: "period-x", tenantId: "tenant-a" } } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects rent payments when currency differs from the rent period", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", calculationState: "RECONCILED", currency: "USD" } as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordRentPayment({ rentPeriodId: "period-1", amount: "100000.00", currency: "ARS", paidAt: "2026-05-05T12:00:00.000Z" }),
+      BadRequestException,
+      400,
+      "La moneda del pago no coincide con la del período de alquiler."
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });
 
 describe("PaymentsService.recordTenantBalanceMovement", () => {
   it("records overpayment reconciliation differences as tenant credit movements", async () => {
     const prisma = createPrismaMock();
+    const audit = createAuditMock();
     vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({
       id: "period-1",
       tenantId: "tenant-a",
@@ -270,14 +388,14 @@ describe("PaymentsService.recordTenantBalanceMovement", () => {
       currency: "ARS"
     } as never);
     prisma.__tx.tenantBalanceMovement.create.mockResolvedValue({ id: "movement-1", tenantId: "tenant-a", type: "CREDIT" });
-    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), audit);
 
     await service.recordTenantBalanceMovement({
       rentPeriodId: "period-1",
       paidAmount: "120000.00",
       realAmount: "100000.00",
       currency: "ARS",
-      reason: "Real index lower than estimated period."
+      reason: "  Real index lower than estimated period.  "
     });
 
     expect(prisma.__tx.tenantBalanceMovement.create).toHaveBeenCalledWith({
@@ -291,6 +409,26 @@ describe("PaymentsService.recordTenantBalanceMovement", () => {
         reason: "Real index lower than estimated period."
       })
     });
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(prisma.__tx, expect.objectContaining({ tenantId: "tenant-a" }), {
+      entityType: "tenant_balance_movement",
+      entityId: "movement-1",
+      action: "tenant_balance_movement.recorded",
+      metadata: { rentPeriodId: "period-1", type: "CREDIT", currency: "ARS" }
+    });
+  });
+
+  it("wraps transaction failures in the tenant balance domain error", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", tenantPersonaId: "tenant-persona-1", currency: "ARS" } as never);
+    vi.mocked(prisma.$transaction).mockRejectedValue(new Error("database unavailable") as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordTenantBalanceMovement({ rentPeriodId: "period-1", paidAmount: "120000.00", realAmount: "100000.00", currency: "ARS" }),
+      BadRequestException,
+      400,
+      "No pudimos registrar el saldo del inquilino. Revisá los datos enviados."
+    );
   });
 
   it("records underpayment reconciliation differences as tenant debt movements", async () => {
@@ -310,6 +448,63 @@ describe("PaymentsService.recordTenantBalanceMovement", () => {
     expect(prisma.__tx.tenantBalanceMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ type: "DEBT", amount: "10000.00" })
     });
+  });
+
+  it("rejects balance movement when the rent period is missing for the active tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue(null);
+    const service = new PaymentsService(prisma, createContextMock("tenant-b"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordTenantBalanceMovement({ rentPeriodId: "period-x", paidAmount: "100000.00", realAmount: "120000.00", currency: "ARS" }),
+      BadRequestException,
+      400,
+      "El período de alquiler indicado no existe en esta inmobiliaria."
+    );
+    expect(prisma.rentPeriod.findUnique).toHaveBeenCalledWith({ where: { id_tenantId: { id: "period-x", tenantId: "tenant-b" } } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects balance movement when the period has no tenant persona", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", tenantPersonaId: null, currency: "ARS" } as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordTenantBalanceMovement({ rentPeriodId: "period-1", paidAmount: "120000.00", realAmount: "100000.00", currency: "ARS" }),
+      BadRequestException,
+      400,
+      "El período de alquiler necesita un inquilino asociado para registrar saldo."
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects balance movement when currency differs from the rent period", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", tenantPersonaId: "tenant-persona-1", currency: "USD" } as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordTenantBalanceMovement({ rentPeriodId: "period-1", paidAmount: "120000.00", realAmount: "100000.00", currency: "ARS" }),
+      BadRequestException,
+      400,
+      "La moneda del saldo no coincide con la del período de alquiler."
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects balance movement when paid and real amounts have no difference", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentPeriod.findUnique).mockResolvedValue({ id: "period-1", tenantId: "tenant-a", tenantPersonaId: "tenant-persona-1", currency: "ARS" } as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expectHttpException(
+      () => service.recordTenantBalanceMovement({ rentPeriodId: "period-1", paidAmount: "100000.00", realAmount: "100000.00", currency: "ARS" }),
+      BadRequestException,
+      400,
+      "No hay diferencia para registrar en el saldo del inquilino."
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -365,6 +560,23 @@ describe("PaymentsService.getContractBalance", () => {
       })
     );
     expect(balance.payments).toHaveLength(3);
+    expect(prisma.payment.findMany).toHaveBeenCalledWith({
+      where: { tenantId: "tenant-a", contractId: "contract-1" },
+      orderBy: { dueAt: "desc" }
+    });
+  });
+
+  it("aggregates positive credit balances from non-voided overpayments", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue({ ...baseContract, currency: "ARS" } as never);
+    vi.mocked(prisma.payment.findMany).mockResolvedValue([
+      { dueAmount: "100000.00", paidAmount: "125000.00", remainingDebt: "0.00", creditBalance: "25000.00", status: "OVERPAID" }
+    ] as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
+
+    await expect(service.getContractBalance("contract-1")).resolves.toEqual(
+      expect.objectContaining({ totalDue: "100000.00", totalPaid: "125000.00", pendingDebt: "0.00", creditBalance: "25000.00" })
+    );
   });
 
   it("rejects when the contract does not belong to the tenant", async () => {
@@ -372,17 +584,25 @@ describe("PaymentsService.getContractBalance", () => {
     vi.mocked(prisma.rentalContract.findUnique).mockResolvedValue(null);
     const service = new PaymentsService(prisma, createContextMock("tenant-a"), createAuditMock());
 
-    await expect(service.getContractBalance("contract-x")).rejects.toBeInstanceOf(NotFoundException);
+    await expectHttpException(() => service.getContractBalance("contract-x"), NotFoundException, 404, "No encontramos el contrato solicitado.");
   });
 });
 
 describe("PaymentsService.getPaymentById", () => {
+  it("returns a payment found inside the active tenant", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.payment.findUnique).mockResolvedValue({ id: "payment-1", tenantId: "tenant-z" } as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-z"), createAuditMock());
+
+    await expect(service.getPaymentById("payment-1")).resolves.toEqual({ id: "payment-1", tenantId: "tenant-z" });
+  });
+
   it("looks up payments by id_tenantId and throws NotFound when missing", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findUnique).mockResolvedValue(null);
     const service = new PaymentsService(prisma, createContextMock("tenant-z"), createAuditMock());
 
-    await expect(service.getPaymentById("payment-x")).rejects.toBeInstanceOf(NotFoundException);
+    await expectHttpException(() => service.getPaymentById("payment-x"), NotFoundException, 404, "No encontramos el pago solicitado.");
     expect(prisma.payment.findUnique).toHaveBeenCalledWith({
       where: { id_tenantId: { id: "payment-x", tenantId: "tenant-z" } }
     });
@@ -410,9 +630,46 @@ describe("PaymentsService.listCashMovements", () => {
     const prisma = createPrismaMock();
     const service = new PaymentsService(prisma, createContextMock("tenant-d"), createAuditMock());
 
-    await expect(
-      service.listCashMovements({ from: "2026-05-30T00:00:00.000Z", to: "2026-05-01T00:00:00.000Z" })
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expectHttpException(
+      () => service.listCashMovements({ from: "2026-05-30T00:00:00.000Z", to: "2026-05-01T00:00:00.000Z" }),
+      BadRequestException,
+      400,
+      "El rango de fechas no es válido."
+    );
+  });
+
+  it("accepts an inclusive date range where from equals to", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.cashMovement.findMany).mockResolvedValue([] as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-d"), createAuditMock());
+
+    await service.listCashMovements({ from: "2026-05-01T00:00:00.000Z", to: "2026-05-01T00:00:00.000Z" });
+
+    expect(prisma.cashMovement.findMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: "tenant-d",
+        occurredAt: { gte: new Date("2026-05-01T00:00:00.000Z"), lte: new Date("2026-05-01T00:00:00.000Z") }
+      },
+      orderBy: { occurredAt: "desc" }
+    });
+  });
+
+  it("applies one-sided date filters when only from or to is provided", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.cashMovement.findMany).mockResolvedValue([] as never);
+    const service = new PaymentsService(prisma, createContextMock("tenant-d"), createAuditMock());
+
+    await service.listCashMovements({ from: "2026-05-01T00:00:00.000Z" });
+    expect(prisma.cashMovement.findMany).toHaveBeenLastCalledWith({
+      where: { tenantId: "tenant-d", occurredAt: { gte: new Date("2026-05-01T00:00:00.000Z") } },
+      orderBy: { occurredAt: "desc" }
+    });
+
+    await service.listCashMovements({ to: "2026-05-31T00:00:00.000Z" });
+    expect(prisma.cashMovement.findMany).toHaveBeenLastCalledWith({
+      where: { tenantId: "tenant-d", occurredAt: { lte: new Date("2026-05-31T00:00:00.000Z") } },
+      orderBy: { occurredAt: "desc" }
+    });
   });
 
   it("returns all tenant movements when no range is provided", async () => {
