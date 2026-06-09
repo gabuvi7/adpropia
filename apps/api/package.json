@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "mutation": "stryker run stryker.conf.mjs"
+    "mutation": "stryker run stryker.conf.mjs",
+    "smoke:r2": "tsx src/common/storage/r2-storage.smoke.ts"
   },
   "dependencies": {
     "@adpropia/database": "workspace:*",
