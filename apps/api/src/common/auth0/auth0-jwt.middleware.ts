@@ -1,4 +1,4 @@
-import { Inject, Injectable, type NestMiddleware, UnauthorizedException } from "@nestjs/common";
+import { HttpException, Inject, Injectable, type NestMiddleware, UnauthorizedException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { RequestContextService } from "../request-context/request-context.service";
 import { Auth0TenantResolver } from "./auth0-tenant-resolver";
@@ -54,7 +54,11 @@ export class Auth0JwtMiddleware implements NestMiddleware {
       throw new UnauthorizedException(invalidTokenMessage(err));
     });
 
-    const resolution = await this.tenantResolver.resolve(claims).catch(() => {
+    const resolution = await this.tenantResolver.resolve(claims).catch((err: unknown) => {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
       throw new UnauthorizedException("Acceso denegado.");
     });
 

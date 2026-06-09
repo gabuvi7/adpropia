@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { PLATFORM_ROLE_SUPERADMIN, type AuthRole } from "../auth/auth-role";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -24,6 +24,26 @@ function hasSuperadminClaim(claims: Auth0JwtClaims): boolean {
 
   const platformRoles = claims[AUTH0_PLATFORM_ROLES_CLAIM];
   return Array.isArray(platformRoles) && platformRoles.includes(PLATFORM_ROLE_SUPERADMIN);
+}
+
+function getStringClaim(claims: Auth0JwtClaims, claimNames: string[]): string | undefined {
+  for (const claimName of claimNames) {
+    const value = claims[claimName];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function getEmailClaim(claims: Auth0JwtClaims): string | undefined {
+  const email = getStringClaim(claims, ["email", "https://adpropia.app/email"]);
+  return email?.includes("@") ? email.toLowerCase() : undefined;
+}
+
+function getNameClaim(claims: Auth0JwtClaims): string | undefined {
+  return getStringClaim(claims, ["name", "nickname", "preferred_username", "https://adpropia.app/name"]);
 }
 
 @Injectable()
@@ -66,29 +86,46 @@ export class Auth0TenantResolver {
       };
     }
 
-    const [tenant, user] = await Promise.all([
+    const [tenant, existingUser] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { auth0OrgId } } as never),
       this.prisma.user.findUnique({ where: { auth0UserId } } as never)
     ]);
 
     if (!tenant) {
       this.logger.warn({ event: "tenant_not_found", auth0OrgId });
-      throw new UnauthorizedException("Inmobiliaria no encontrada.");
+      throw new ForbiddenException("Inmobiliaria no encontrada.");
     }
 
     if (tenant.status !== "ACTIVE") {
       this.logger.warn({ event: "tenant_inactive", auth0OrgId, status: tenant.status });
-      throw new UnauthorizedException("La inmobiliaria no esta activa.");
+      throw new ForbiddenException("La inmobiliaria no esta activa.");
     }
 
+    let user = existingUser;
+
     if (!user) {
-      this.logger.warn({ event: "user_not_found", auth0UserId });
-      throw new UnauthorizedException("Usuario no encontrado.");
+      const email = getEmailClaim(claims);
+
+      if (!email) {
+        this.logger.warn({ event: "user_email_missing", auth0UserId });
+        throw new ForbiddenException("No se pudo crear el usuario local.");
+      }
+
+      user = await this.prisma.user.create({
+        data: {
+          auth0UserId,
+          email,
+          name: getNameClaim(claims),
+          isActive: true
+        }
+      } as never);
+
+      this.logger.log({ event: "user_auto_created", auth0UserId, userId: user.id });
     }
 
     if (!user.isActive) {
       this.logger.warn({ event: "user_inactive", auth0UserId });
-      throw new UnauthorizedException("El usuario no esta activo.");
+      throw new ForbiddenException("El usuario no esta activo.");
     }
 
     if (isSuperadmin) {
@@ -106,12 +143,12 @@ export class Auth0TenantResolver {
 
     if (!membership) {
       this.logger.warn({ event: "membership_not_found", auth0OrgId, auth0UserId, tenantId: tenant.id, userId: user.id });
-      throw new UnauthorizedException("No tenes acceso a esta inmobiliaria.");
+      throw new ForbiddenException("No tenes acceso a esta inmobiliaria.");
     }
 
     if (!membership.isActive) {
       this.logger.warn({ event: "membership_inactive", tenantId: tenant.id, userId: user.id });
-      throw new UnauthorizedException("Tu acceso a esta inmobiliaria no esta activo.");
+      throw new ForbiddenException("Tu acceso a esta inmobiliaria no esta activo.");
     }
 
     this.logger.log({ event: "tenant_resolved", tenantId: tenant.id, userId: user.id, role: membership.role });

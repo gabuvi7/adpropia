@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "mutation": "stryker run stryker.conf.mjs",
-    "smoke:r2": "tsx src/common/storage/r2-storage.smoke.ts"
+    "smoke:r2": "tsx src/common/storage/r2-storage.smoke.ts",
+    "smoke:auth0": "tsx src/scripts/bootstrap-auth0-smoke.ts"
   },
   "dependencies": {
     "@adpropia/database": "workspace:*",

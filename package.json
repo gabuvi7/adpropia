@@ -12,6 +12,7 @@
     "test:unit": "pnpm -r test:unit",
     "mutation:api": "pnpm --filter @adpropia/api mutation",
     "smoke:r2": "pnpm --filter @adpropia/api smoke:r2",
+    "smoke:auth0": "pnpm --filter @adpropia/api smoke:auth0",
     "db:generate": "pnpm --filter @adpropia/database prisma:generate",
     "db:migrate": "pnpm --filter @adpropia/database prisma:migrate"
   },

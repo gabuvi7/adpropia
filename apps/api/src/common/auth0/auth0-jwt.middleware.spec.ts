@@ -1,4 +1,4 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
 import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import { describe, expect, it, vi } from "vitest";
 import { Auth0TenantResolver, type Auth0JwtClaims } from "./auth0-tenant-resolver";
@@ -38,7 +38,7 @@ function createContextServiceMock(): RequestContextService {
 function createTenantResolverMock(shouldReject = false): Auth0TenantResolver {
   return {
     resolve: vi.fn().mockImplementation(shouldReject
-      ? () => Promise.reject(new UnauthorizedException("No access"))
+      ? () => Promise.reject(new ForbiddenException("No access"))
       : () => Promise.resolve({ tenantId: "tenant-1", userId: "user-1", role: "ADMIN" })
     )
   } as unknown as Auth0TenantResolver;
@@ -142,7 +142,7 @@ describe("Auth0JwtMiddleware", () => {
     await expect(middleware.use(req, undefined, vi.fn())).rejects.toThrow("Token invalido. Detalle: Invalid token");
   });
 
-  it("throws when tenant resolution fails", async () => {
+  it("throws ForbiddenException when tenant resolution denies an authenticated identity", async () => {
     const jwtService = createJwtServiceMock();
     const ctxService = createContextServiceMock();
     const resolver = createTenantResolverMock(true);
@@ -150,6 +150,6 @@ describe("Auth0JwtMiddleware", () => {
 
     const req = createRequest("Bearer test-token");
 
-    await expect(middleware.use(req, undefined, vi.fn())).rejects.toThrow(UnauthorizedException);
+    await expect(middleware.use(req, undefined, vi.fn())).rejects.toThrow(ForbiddenException);
   });
 });

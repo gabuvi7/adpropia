@@ -99,12 +99,11 @@ export async function GET() {
     });
 
     if (!response.ok) {
-      const detail = await response.text().catch(() => "Unknown error");
       console.warn(
         `auth_me_bridge_backend_error backend_target="${safeBackendTarget(backendUrl)}" status="${response.status}" token_format="${diagnostics.format}" token_alg="${diagnostics.alg ?? "unknown"}" token_kid="${diagnostics.kid ?? "unknown"}" token_iss="${diagnostics.iss ?? "unknown"}" token_aud="${JSON.stringify(diagnostics.aud ?? "unknown")}"`
       );
       return NextResponse.json(
-        { error: "Error del servidor.", detail },
+        { error: "Error del servidor." },
         { status: response.status },
       );
     }

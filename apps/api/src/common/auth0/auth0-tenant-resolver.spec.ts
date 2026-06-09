@@ -1,4 +1,4 @@
-import { UnauthorizedException, Logger } from "@nestjs/common";
+import { ForbiddenException, UnauthorizedException, Logger } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../prisma/prisma.service";
 import {
@@ -13,7 +13,8 @@ function createPrismaMock(overrides?: Partial<PrismaService>) {
       findUnique: vi.fn()
     },
     user: {
-      findUnique: vi.fn()
+      findUnique: vi.fn(),
+      create: vi.fn()
     },
     tenantUser: {
       findUnique: vi.fn()
@@ -63,59 +64,100 @@ describe("Auth0TenantResolver", () => {
     await expect(resolver.resolve({ org_id: "org_abc123" } as Auth0JwtClaims)).rejects.toThrow(UnauthorizedException);
   });
 
-  it("throws when tenant not found by auth0OrgId", async () => {
+  it("throws ForbiddenException when tenant not found by auth0OrgId and does not create tenant", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(null as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
 
     const resolver = new Auth0TenantResolver(prisma);
-    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_unknown" })).rejects.toThrow(UnauthorizedException);
+    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_unknown" })).rejects.toThrow(ForbiddenException);
+    expect(prisma.tenant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ auth0OrgId: "org_unknown" }) })
+    );
+    expect("create" in prisma.tenant ? prisma.tenant.create : undefined).toBeUndefined();
   });
 
-  it("throws when tenant is not ACTIVE", async () => {
+  it("throws ForbiddenException when tenant is not ACTIVE", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue({ ...mockTenant, status: "SUSPENDED" } as never);
 
     const resolver = new Auth0TenantResolver(prisma);
-    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(UnauthorizedException);
+    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(ForbiddenException);
   });
 
-  it("throws when user not found by auth0UserId", async () => {
+  it("auto-creates a missing active user from safe Auth0 claims but denies access without membership", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null as never);
+    vi.mocked(prisma.user.create).mockResolvedValue({
+      ...mockUser,
+      id: "user-created",
+      auth0UserId: "auth0|new_user",
+      email: "new.user@example.com",
+      name: "New User",
+      isActive: true
+    } as never);
+    vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue(null as never);
 
     const resolver = new Auth0TenantResolver(prisma);
-    await expect(resolver.resolve({ sub: "auth0|unknown", org_id: "org_abc123" })).rejects.toThrow(UnauthorizedException);
+    await expect(resolver.resolve({
+      sub: "auth0|new_user",
+      org_id: "org_abc123",
+      email: "new.user@example.com",
+      name: "New User"
+    })).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: {
+        auth0UserId: "auth0|new_user",
+        email: "new.user@example.com",
+        name: "New User",
+        isActive: true
+      }
+    });
+    expect(prisma.tenantUser.findUnique).toHaveBeenCalledWith({
+      where: { tenantId_userId: { tenantId: "tenant-1", userId: "user-created" } }
+    });
   });
 
-  it("throws when user is not active", async () => {
+  it("throws ForbiddenException when user is not active", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ ...mockUser, isActive: false } as never);
 
     const resolver = new Auth0TenantResolver(prisma);
-    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(UnauthorizedException);
+    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(ForbiddenException);
   });
 
-  it("throws when no membership exists for tenant+user", async () => {
+  it("throws ForbiddenException when no membership exists for tenant+user", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
     vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue(null as never);
 
     const resolver = new Auth0TenantResolver(prisma);
-    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(UnauthorizedException);
+    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(ForbiddenException);
   });
 
-  it("throws when membership is not active", async () => {
+  it("throws ForbiddenException when membership is not active", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
     vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue({ ...mockMembership, isActive: false } as never);
 
     const resolver = new Auth0TenantResolver(prisma);
-    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(UnauthorizedException);
+    await expect(resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123" })).rejects.toThrow(ForbiddenException);
+  });
+
+  it("uses TenantUser.role as the local authorization source", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never);
+    vi.mocked(prisma.tenantUser.findUnique).mockResolvedValue({ ...mockMembership, role: "READONLY" } as never);
+
+    const resolver = new Auth0TenantResolver(prisma);
+    const result = await resolver.resolve({ sub: "auth0|user_xyz", org_id: "org_abc123", "https://adpropia.com/roles": ["ADMIN"] });
+
+    expect(result.role).toBe("READONLY");
   });
 
   describe("SUPERADMIN claim resolution", () => {
