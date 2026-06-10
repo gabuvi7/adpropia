@@ -8,7 +8,7 @@ import {
 const validEnv = {
   NODE_ENV: "development",
   DATABASE_URL: "postgresql://localhost/adpropia",
-  AUTH0_ORG_ID: "org_abc123",
+  AUTH0_ORGANIZATION_ID: "org_abc123",
   AUTH0_USER_ID: "auth0|user_xyz",
   AUTH0_USER_EMAIL: "agent@example.com",
   AUTH0_USER_NAME: "Smoke Agent",
@@ -37,7 +37,8 @@ describe("bootstrap-auth0-smoke", () => {
   });
 
   it("requires safe explicit identifiers", () => {
-    expect(() => parseBootstrapAuth0SmokeEnv({ ...validEnv, AUTH0_ORG_ID: "" })).toThrow("AUTH0_ORG_ID");
+    expect(() => parseBootstrapAuth0SmokeEnv({ ...validEnv, AUTH0_ORGANIZATION_ID: "" })).toThrow("AUTH0_ORGANIZATION_ID");
+    expect(() => parseBootstrapAuth0SmokeEnv({ ...validEnv, AUTH0_ORG_ID: "org_legacy", AUTH0_ORGANIZATION_ID: undefined })).toThrow("AUTH0_ORGANIZATION_ID");
     expect(() => parseBootstrapAuth0SmokeEnv({ ...validEnv, AUTH0_USER_EMAIL: "not-an-email" })).toThrow("AUTH0_USER_EMAIL");
     expect(() => parseBootstrapAuth0SmokeEnv({ ...validEnv, TENANT_ROLE: "SUPERADMIN" })).toThrow("TENANT_ROLE");
   });

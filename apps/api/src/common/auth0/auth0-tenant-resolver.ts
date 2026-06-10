@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { PLATFORM_ROLE_SUPERADMIN, type AuthRole } from "../auth/auth-role";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -50,7 +50,7 @@ function getNameClaim(claims: Auth0JwtClaims): string | undefined {
 export class Auth0TenantResolver {
   private readonly logger = new Logger(Auth0TenantResolver.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async resolve(claims: Auth0JwtClaims): Promise<TenantResolution> {
     const { org_id: auth0OrgId, sub: auth0UserId } = claims;

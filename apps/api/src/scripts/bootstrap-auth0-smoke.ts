@@ -71,7 +71,7 @@ export function parseBootstrapAuth0SmokeEnv(env: Env): BootstrapAuth0SmokeInput 
 
   const name = optionalTrimmed(env, "AUTH0_USER_NAME");
   return {
-    auth0OrgId: required(env, "AUTH0_ORG_ID"),
+    auth0OrgId: required(env, "AUTH0_ORGANIZATION_ID"),
     auth0UserId: required(env, "AUTH0_USER_ID"),
     email: validateEmail(required(env, "AUTH0_USER_EMAIL")),
     tenantName: required(env, "TENANT_NAME"),

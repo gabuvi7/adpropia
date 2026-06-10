@@ -12,6 +12,7 @@ type JwtDiagnostics = {
   kid?: string;
   iss?: string;
   aud?: string | string[];
+  orgId?: string;
 };
 
 export const AUTH0_ISSUER_KEY = "AUTH0_ISSUER";
@@ -48,6 +49,10 @@ export function getJwtDiagnostics(token: string): JwtDiagnostics {
 
   if (typeof payload.aud === "string" || Array.isArray(payload.aud)) {
     diagnostics.aud = payload.aud;
+  }
+
+  if (typeof payload.org_id === "string") {
+    diagnostics.orgId = payload.org_id;
   }
 
   return diagnostics;
@@ -99,7 +104,7 @@ export class Auth0JwtService {
       return decoded as Auth0JwtClaims;
     } catch (err) {
       this.logger.warn(
-        `jwt_verification_failed error="${(err as Error).message}" expected_issuer="${normalizedIssuer}" expected_audience="${audience}" token_format="${diagnostics.format}" token_alg="${diagnostics.alg ?? "unknown"}" token_kid="${diagnostics.kid ?? "unknown"}" token_iss="${diagnostics.iss ?? "unknown"}" token_aud="${JSON.stringify(diagnostics.aud ?? "unknown")}"`
+        `jwt_verification_failed error="${(err as Error).message}" expected_issuer="${normalizedIssuer}" expected_audience="${audience}" token_format="${diagnostics.format}" token_alg="${diagnostics.alg ?? "unknown"}" token_kid="${diagnostics.kid ?? "unknown"}" token_iss="${diagnostics.iss ?? "unknown"}" token_aud="${JSON.stringify(diagnostics.aud ?? "unknown")}" token_org_id="${diagnostics.orgId ?? "unknown"}"`
       );
       throw new Error((err as Error).message);
     }

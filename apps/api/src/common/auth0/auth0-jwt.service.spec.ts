@@ -89,7 +89,7 @@ describe("Auth0JwtService issuer normalization", () => {
   it("extracts safe diagnostics without verifying or logging the token", () => {
     const token = [
       base64UrlEncode({ alg: "RS256", typ: "JWT", kid: "kid-123" }),
-      base64UrlEncode({ iss: "https://example.us.auth0.com/", aud: "https://api.example.com" }),
+      base64UrlEncode({ iss: "https://example.us.auth0.com/", aud: "https://api.example.com", org_id: "org_abc123" }),
       "signature"
     ].join(".");
 
@@ -98,7 +98,8 @@ describe("Auth0JwtService issuer normalization", () => {
       alg: "RS256",
       kid: "kid-123",
       iss: "https://example.us.auth0.com/",
-      aud: "https://api.example.com"
+      aud: "https://api.example.com",
+      orgId: "org_abc123"
     });
   });
 

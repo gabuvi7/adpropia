@@ -1,6 +1,7 @@
 import { ForbiddenException, UnauthorizedException, Logger } from "@nestjs/common";
+import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import { describe, expect, it, vi } from "vitest";
-import type { PrismaService } from "../prisma/prisma.service";
+import { PrismaService } from "../prisma/prisma.service";
 import {
   Auth0TenantResolver,
   AUTH0_PLATFORM_ROLES_CLAIM,
@@ -29,6 +30,15 @@ const mockUser = { id: "user-1", auth0UserId: "auth0|user_xyz", email: "test@tes
 const mockMembership = { id: "tu-1", tenantId: "tenant-1", userId: "user-1", role: "ADMIN", isActive: true };
 
 describe("Auth0TenantResolver", () => {
+  it("declares explicit PrismaService injection token for Nest DI", () => {
+    const dependencies = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, Auth0TenantResolver) as Array<{
+      index: number;
+      param: unknown;
+    }>;
+
+    expect(dependencies).toEqual(expect.arrayContaining([{ index: 0, param: PrismaService }]));
+  });
+
   it("resolves valid claims to internal tenant and user", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as never);

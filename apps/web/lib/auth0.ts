@@ -12,5 +12,6 @@ export const auth0 = new Auth0Client({
   authorizationParameters: {
     audience: env.AUTH0_AUDIENCE,
     scope: "openid profile email",
+    ...(env.AUTH0_ORGANIZATION_ID ? { organization: env.AUTH0_ORGANIZATION_ID } : {}),
   },
 });

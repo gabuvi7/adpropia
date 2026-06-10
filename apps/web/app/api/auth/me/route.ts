@@ -9,6 +9,7 @@ type TokenDiagnostics = {
   kid?: string;
   iss?: string;
   aud?: string | string[];
+  orgId?: string;
 };
 
 function decodeBase64UrlJson(value: string): unknown {
@@ -24,7 +25,7 @@ function getTokenDiagnostics(token: string): TokenDiagnostics {
 
   try {
     const header = decodeBase64UrlJson(headerPart) as { alg?: unknown; kid?: unknown };
-    const payload = decodeBase64UrlJson(payloadPart) as { iss?: unknown; aud?: unknown };
+    const payload = decodeBase64UrlJson(payloadPart) as { iss?: unknown; aud?: unknown; org_id?: unknown };
     const diagnostics: TokenDiagnostics = { format: "jwt" };
 
     if (typeof header.alg === "string") {
@@ -41,6 +42,10 @@ function getTokenDiagnostics(token: string): TokenDiagnostics {
 
     if (typeof payload.aud === "string" || Array.isArray(payload.aud)) {
       diagnostics.aud = payload.aud as string | string[];
+    }
+
+    if (typeof payload.org_id === "string") {
+      diagnostics.orgId = payload.org_id;
     }
 
     return diagnostics;
@@ -89,6 +94,7 @@ export async function GET() {
     const diagnostics = getTokenDiagnostics(token);
     console.info(
       `auth_me_bridge_request backend_target="${safeBackendTarget(backendUrl)}" token_format="${diagnostics.format}" token_alg="${diagnostics.alg ?? "unknown"}" token_kid="${diagnostics.kid ?? "unknown"}" token_iss="${diagnostics.iss ?? "unknown"}" token_aud="${JSON.stringify(diagnostics.aud ?? "unknown")}"`
+      + ` token_org_id="${diagnostics.orgId ?? "unknown"}"`
     );
 
     const response = await fetch(`${backendUrl}/auth/me`, {
@@ -101,6 +107,7 @@ export async function GET() {
     if (!response.ok) {
       console.warn(
         `auth_me_bridge_backend_error backend_target="${safeBackendTarget(backendUrl)}" status="${response.status}" token_format="${diagnostics.format}" token_alg="${diagnostics.alg ?? "unknown"}" token_kid="${diagnostics.kid ?? "unknown"}" token_iss="${diagnostics.iss ?? "unknown"}" token_aud="${JSON.stringify(diagnostics.aud ?? "unknown")}"`
+        + ` token_org_id="${diagnostics.orgId ?? "unknown"}"`
       );
       return NextResponse.json(
         { error: "Error del servidor." },

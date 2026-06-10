@@ -17,10 +17,10 @@ import { GET } from "./route";
 const originalEnv = process.env;
 const originalFetch = globalThis.fetch;
 
-function createJwtLikeToken() {
+function createJwtLikeToken(payloadOverrides: Record<string, unknown> = {}) {
   const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "kid-123" })).toString("base64url");
   const payload = Buffer.from(
-    JSON.stringify({ iss: "https://example.us.auth0.com/", aud: "https://api.example.com" })
+    JSON.stringify({ iss: "https://example.us.auth0.com/", aud: "https://api.example.com", ...payloadOverrides })
   ).toString("base64url");
   return `${header}.${payload}.signature`;
 }
@@ -100,7 +100,7 @@ describe("GET /api/auth/me", () => {
   });
 
   it("surfaces backend 401 denials without exposing tokens or secrets", async () => {
-    const token = createJwtLikeToken();
+    const token = createJwtLikeToken({ org_id: "org_abc123" });
     mocks.mockGetSession.mockResolvedValue({ user: { sub: "auth0|123" } });
     mocks.mockGetAccessToken.mockResolvedValue({ token });
     process.env = { ...process.env, ADPROPIA_API_BASE_URL: "http://localhost:3001" };
@@ -117,6 +117,21 @@ describe("GET /api/auth/me", () => {
     expect(body).not.toContain("AUTH0_CLIENT_SECRET");
     expect(body).not.toContain("shh");
     expect(warnSpy.mock.calls.join("\n")).not.toContain(token);
+    expect(warnSpy.mock.calls.join("\n")).toContain('token_org_id="org_abc123"');
+  });
+
+  it("logs unknown org_id when the access token has no organization context", async () => {
+    const token = createJwtLikeToken();
+    mocks.mockGetSession.mockResolvedValue({ user: { sub: "auth0|123" } });
+    mocks.mockGetAccessToken.mockResolvedValue({ token });
+    process.env = { ...process.env, ADPROPIA_API_BASE_URL: "http://localhost:3001" };
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ userId: "user-1" }), { status: 200 }));
+
+    await GET();
+
+    expect(infoSpy.mock.calls.join("\n")).toContain('token_org_id="unknown"');
+    expect(infoSpy.mock.calls.join("\n")).not.toContain(token);
   });
 
   it("surfaces backend 403 denials without falling back to access or leaking backend detail", async () => {
