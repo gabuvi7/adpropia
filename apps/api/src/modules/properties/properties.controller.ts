@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post } from "@nestjs/common";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { CORE_ENTITY_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
@@ -7,7 +7,7 @@ import { PropertiesService } from "./properties.service";
 
 @Controller("properties")
 export class PropertiesController {
-  constructor(private readonly propertiesService: PropertiesService) {}
+  constructor(@Inject(PropertiesService) private readonly propertiesService: PropertiesService) {}
 
   @Post()
   @RequiresRole(...CORE_ENTITY_PERMISSIONS.create)

@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Param, Post } from "@nestjs/common";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { ADMIN_PROVISIONING_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
@@ -11,7 +11,7 @@ import { AdminProvisioningService } from "./admin-provisioning.service";
 
 @Controller("admin/provisioning")
 export class AdminProvisioningController {
-  constructor(private readonly service: AdminProvisioningService) {}
+  constructor(@Inject(AdminProvisioningService) private readonly service: AdminProvisioningService) {}
 
   @Post("tenants/:tenantId/auth0-org")
   @RequiresRole(...ADMIN_PROVISIONING_PERMISSIONS.manage)

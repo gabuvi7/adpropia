@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@adpropia/database";
 import { parseAuditMetadata, redactAuditMetadata } from "@adpropia/shared";
 import { PrismaService } from "../../common/prisma";
@@ -16,7 +16,7 @@ export type AuditEntryInput = Readonly<{
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async listAuditLogs(query: AuditLogQuery) {
     const where = this.buildListWhere(query);

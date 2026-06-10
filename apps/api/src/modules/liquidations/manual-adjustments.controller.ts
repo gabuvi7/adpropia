@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, HttpCode, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, HttpCode, Inject, Param, Post } from "@nestjs/common";
 import { parseRequestBody } from "../../common/validation/zod-validation";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { LIQUIDATIONS_PERMISSIONS } from "../../common/auth/permissions";
@@ -14,7 +14,7 @@ import { LiquidationsService } from "./liquidations.service";
  */
 @Controller("liquidations/:liquidationId/manual-adjustments")
 export class ManualAdjustmentsController {
-  constructor(private readonly service: LiquidationsService) {}
+  constructor(@Inject(LiquidationsService) private readonly service: LiquidationsService) {}
 
   @Post()
   @RequiresRole(...LIQUIDATIONS_PERMISSIONS.manualAdjustments)

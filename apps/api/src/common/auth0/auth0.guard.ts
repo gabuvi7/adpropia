@@ -2,6 +2,7 @@ import {
   type CanActivate,
   type ExecutionContext,
   Injectable,
+  Inject,
   Logger,
   UnauthorizedException
 } from "@nestjs/common";
@@ -12,6 +13,7 @@ export class Auth0Guard implements CanActivate {
   private readonly logger = new Logger(Auth0Guard.name);
 
   constructor(
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService
   ) {}
 

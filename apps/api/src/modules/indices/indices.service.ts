@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import type { EconomicIndexType, Prisma } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
@@ -35,7 +35,9 @@ interface EstimatedRentPeriodForReconciliation {
 @Injectable()
 export class IndicesService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
     private readonly adapters: IndexProviderAdapter[] = []
   ) {}

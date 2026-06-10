@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { CashMovement, Currency, Payment, Prisma } from "@adpropia/database";
 import { allocatePaymentAmount, money } from "@adpropia/shared";
 import { fromCents, toCents } from "../../common/money/decimal-cents";
@@ -39,8 +39,11 @@ export interface RecordTenantBalanceMovementDto {
 @Injectable()
 export class PaymentsService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Inject(AuditService)
     private readonly audit: AuditService
   ) {}
 

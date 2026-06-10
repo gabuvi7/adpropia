@@ -98,12 +98,17 @@ export class LiquidationsService {
   private readonly logger = new Logger(LiquidationsService.name);
 
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Inject(LiquidationCalculator)
     private readonly calculator: LiquidationCalculator,
+    @Inject(LiquidationStateMachine)
     private readonly stateMachine: LiquidationStateMachine,
     @Inject(PDF_RENDERER) private readonly pdfRenderer: PdfRenderer,
     @Inject(DOCUMENT_STORAGE) private readonly storage: DocumentStorage,
+    @Inject(AuditService)
     private readonly audit: AuditService
   ) {}
 

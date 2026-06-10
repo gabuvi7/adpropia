@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { TenantRole } from "@adpropia/shared";
 import type { Prisma } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
@@ -39,8 +39,11 @@ export type ProvisionMembershipResult = {
 @Injectable()
 export class AdminProvisioningService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(AuditService)
     private readonly audit: AuditService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService
   ) {}
 

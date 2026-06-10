@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, TenantStatus } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
@@ -11,8 +11,11 @@ export type TenantWithSettings = Prisma.TenantGetPayload<{ include: { settings: 
 @Injectable()
 export class TenantsService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(AuditService)
     private readonly audit: AuditService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService
   ) {}
 
