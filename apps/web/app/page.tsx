@@ -1,19 +1,30 @@
-import { Button } from "@/components/ui/button";
-import { AppShell } from "../components/shared/app-shell";
+import { FinalCta, LandingHero, ProcessSection, ProofSection, PublicHeader, type LandingCta } from "@/components/landing/public-landing";
+import { auth0 } from "@/lib/auth0";
 
-export default function LandingPage() {
+function resolveLandingCta(session: Awaited<ReturnType<typeof auth0.getSession>>): LandingCta {
+  if (!session) return { href: "/auth/login", label: "Solicitar acceso" };
+
+  const name = session.user.name ?? session.user.email ?? "Ya";
+  return {
+    href: "/dashboard",
+    label: "Ir al panel",
+    note: `${name}, ya tenés una sesión activa.`,
+  };
+}
+
+export default async function LandingPage() {
+  const session = await auth0.getSession();
+  const cta = resolveLandingCta(session);
+
   return (
-    <AppShell tenantName="AdPropIA">
-      <section className="hero">
-        <p className="eyebrow">Base SaaS multi-cliente</p>
-        <h1>Gestión inmobiliaria con aislamiento por cliente desde el día uno.</h1>
-        <p>
-          Primer módulo base para propietarios, inquilinos, propiedades, contratos, pagos, caja, liquidaciones y auditoría.
-        </p>
-        <Button asChild>
-          <a href="/auth/login">Iniciar sesión</a>
-        </Button>
-      </section>
-    </AppShell>
+    <>
+      <PublicHeader cta={cta} />
+      <main id="contenido" tabIndex={-1} className="scroll-mt-24">
+        <LandingHero cta={cta} />
+        <ProofSection />
+        <ProcessSection />
+      </main>
+      <FinalCta cta={cta} />
+    </>
   );
 }
