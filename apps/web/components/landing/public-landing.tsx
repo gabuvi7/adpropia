@@ -1,7 +1,6 @@
 export type LandingCta = Readonly<{
-  href: "/auth/login" | "/dashboard";
+  href: "/auth/login";
   label: string;
-  note?: string;
 }>;
 
 type CtaProps = Readonly<{ cta: LandingCta }>;
@@ -89,7 +88,6 @@ export function LandingHero({ cta }: CtaProps) {
             <CtaLink cta={cta} />
             <a className="landing-focus inline-flex min-h-12 items-center px-1 text-sm font-semibold text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href="#control">Ver cómo ordena la operación</a>
           </div>
-          {cta.note && <p className="mt-4 text-sm font-medium text-[#0355e8]">{cta.note}</p>}
         </div>
         <div className="relative bg-[#0b1738] p-4 text-white shadow-2xl shadow-[#0355e8]/25">
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(0deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:3rem_3rem]" aria-hidden="true" />
