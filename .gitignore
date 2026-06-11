@@ -31,3 +31,5 @@ skill-registry.md
 .opencode
 
 .stryker-tmp/*
+
+tsconfig.tsbuildinfo

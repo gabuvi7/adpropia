@@ -1,21 +1,8 @@
 import { FinalCta, LandingHero, ProcessSection, ProofSection, PublicHeader, type LandingCta } from "@/components/landing/public-landing";
-import { auth0 } from "@/lib/auth0";
 
-function resolveLandingCta(session: Awaited<ReturnType<typeof auth0.getSession>>): LandingCta {
-  if (!session) return { href: "/auth/login", label: "Solicitar acceso" };
+const cta: LandingCta = { href: "/auth/login", label: "Ingresar al panel" };
 
-  const name = session.user.name ?? session.user.email ?? "Ya";
-  return {
-    href: "/dashboard",
-    label: "Ir al panel",
-    note: `${name}, ya tenés una sesión activa.`,
-  };
-}
-
-export default async function LandingPage() {
-  const session = await auth0.getSession();
-  const cta = resolveLandingCta(session);
-
+export default function LandingPage() {
   return (
     <>
       <PublicHeader cta={cta} />

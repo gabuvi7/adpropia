@@ -11,7 +11,7 @@ import {
 
 const loginCta: LandingCta = {
   href: "/auth/login",
-  label: "Solicitar acceso",
+  label: "Ingresar al panel",
 };
 
 const dashboardCta: LandingCta = {
@@ -31,7 +31,8 @@ describe("public landing components", () => {
     expect(html).not.toContain("Por GU Solutions");
     expect(html).toContain("href=\"#proceso\"");
     expect(html).toContain("href=\"/auth/login\"");
-    expect(html).toContain("Solicitar acceso");
+    expect(html).toContain("Ingresar al panel");
+    expect(html).not.toContain("Solicitar acceso");
   });
 
   it("renders hero copy with the CTA supplied by the server view model", () => {
@@ -41,7 +42,9 @@ describe("public landing components", () => {
     expect(anonymousHtml).toContain("Control inmobiliario para operar cartera, contratos y caja");
     expect(anonymousHtml).toContain("Plano operativo");
     expect(anonymousHtml).not.toMatch(/<[^>]*aria-hidden="true"[^>]*>Plano operativo/);
-    expect(anonymousHtml).toContain("Señales de operación");
+    expect(anonymousHtml).toContain("Automatismos operativos para detectar próximas actualizaciones");
+    expect(anonymousHtml).toContain("preparar ajustes por IPC, ICL, UVA o reglas propias");
+    expect(anonymousHtml).toContain("IPC, ICL, UVA y ajustes personalizados");
     expect(anonymousHtml).not.toMatch(/MVP|roadmap/i);
     expect(anonymousHtml).toContain("href=\"/auth/login\"");
     expect(authenticatedHtml).toContain("href=\"/dashboard\"");
@@ -59,6 +62,11 @@ describe("public landing components", () => {
 
     expect(html).toContain("<h2");
     expect(html).toContain("Del dato disperso al control operativo");
+    expect(html).toContain("Índices y ajustes");
+    expect(html).toContain("IPC, ICL, UVA y esquemas fijos, manuales o personalizados");
+    expect(html).toContain("Registrá reglas de contrato: índice aplicable, período de ajuste, vigencia");
+    expect(html).toContain("Usá automatismos para detectar próximas actualizaciones, preparar ajustes y priorizar qué revisar");
+    expect(html).toContain("Confirmá el cambio con cálculo, fecha efectiva y evidencia trazable");
     expect(html).toContain("Una secuencia sobria para tomar control");
     expect(html).toContain("Ordená la operación antes de escalarla");
     expect(html).toContain("Decisiones con rastro");

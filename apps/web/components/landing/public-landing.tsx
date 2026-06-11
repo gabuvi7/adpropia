@@ -12,8 +12,8 @@ const proofPoints = [
     text: "Propiedades, unidades, propietarios e inquilinos se leen como relaciones operativas, no como registros sueltos.",
   },
   {
-    title: "Contratos en tiempo",
-    text: "Vencimientos, renovaciones y compromisos aparecen con prioridad para anticipar trabajo crítico.",
+    title: "Índices y ajustes",
+    text: "IPC, ICL, UVA y esquemas fijos, manuales o personalizados se registran por contrato con vigencia, cálculo preparado y rastro para revisión.",
   },
   {
     title: "Caja explicable",
@@ -23,14 +23,14 @@ const proofPoints = [
 
 const operatingSignals = [
   ["Cartera", "128 unidades bajo lectura operativa"],
-  ["Contratos", "17 vencimientos requieren decisión"],
+  ["Índices", "IPC, ICL, UVA y ajustes personalizados"],
   ["Caja", "3 desvíos listos para revisar"],
 ] as const;
 
 const processSteps = [
-  "Consolidá cartera, propietarios, inquilinos y unidades en una base confiable.",
-  "Ordená contratos, vencimientos y pagos por prioridad operativa.",
-  "Escalá liquidaciones y reportes sin perder contexto entre clientes.",
+  "Registrá reglas de contrato: índice aplicable, período de ajuste, vigencia y criterio fijo, manual o personalizado.",
+  "Usá automatismos para detectar próximas actualizaciones, preparar ajustes y priorizar qué revisar.",
+  "Confirmá el cambio con cálculo, fecha efectiva y evidencia trazable antes de comunicar o liquidar.",
 ] as const;
 
 function CtaLink({ cta, variant = "primary" }: CtaProps & Readonly<{ variant?: "primary" | "secondary" }>) {
@@ -83,7 +83,7 @@ export function LandingHero({ cta }: CtaProps) {
             Centralizá propiedades, vencimientos, pagos y auditoría en una plataforma pensada para administraciones que necesitan trazabilidad sin ruido visual.
           </p>
           <p className="landing-pretty mt-6 max-w-2xl border-l-4 border-[#0355e8] bg-[#1472fa]/10 px-5 py-4 text-sm font-semibold leading-6 text-[#0b1738]">
-            Señales de operación para priorizar vencimientos, detectar desvíos y explicar decisiones sin prometer automatismos mágicos.
+            Automatismos operativos para detectar próximas actualizaciones, preparar ajustes por IPC, ICL, UVA o reglas propias, y dejar evidencia para revisar.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <CtaLink cta={cta} />
@@ -141,7 +141,7 @@ export function ProofSection() {
         <div className="bg-white p-6 text-[#0b1738] md:col-start-2">
           <h3 className="text-xl font-semibold tracking-[-0.03em]">Decisiones con rastro</h3>
           <p className="landing-pretty mt-3 max-w-3xl leading-7">
-            AdPropIA organiza señales críticas para que el equipo priorice trabajo, revise desvíos y sostenga decisiones explicables ante clientes y administración.
+            AdPropIA organiza señales críticas para que el equipo priorice trabajo, revise desvíos y sostenga ajustes explicables ante clientes y administración.
           </p>
         </div>
       </div>
