@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, Property } from "@adpropia/database";
 import { buildChangedFieldsMetadata } from "@adpropia/shared";
 import { PrismaService } from "../../common/prisma";
@@ -35,8 +35,11 @@ export interface CreatePropertyUnitDto {
 @Injectable()
 export class PropertiesService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Inject(AuditService)
     private readonly audit: AuditService
   ) {}
 

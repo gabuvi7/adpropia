@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   CashMovement,
   CashMovementType,
@@ -94,7 +94,9 @@ export type OutstandingBalancesReport = {
 @Injectable()
 export class ReportsService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService
   ) {}
 

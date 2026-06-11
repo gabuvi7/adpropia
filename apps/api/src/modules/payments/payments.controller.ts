@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, Query } from "@nestjs/common";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { PAYMENTS_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
@@ -7,7 +7,7 @@ import { PaymentsService } from "./payments.service";
 
 @Controller("payments")
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(@Inject(PaymentsService) private readonly paymentsService: PaymentsService) {}
 
   @Post()
   @RequiresRole(...PAYMENTS_PERMISSIONS.create)

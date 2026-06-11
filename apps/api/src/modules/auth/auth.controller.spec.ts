@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import { AuthController } from "./auth.controller";
-import type { AuthService, AuthBootstrap } from "./auth.service";
+import type { AuthBootstrap } from "./auth.service";
+import { AuthService } from "./auth.service";
 
 function createServiceMock(bootstrap?: AuthBootstrap): AuthService {
   return {
@@ -11,6 +13,15 @@ function createServiceMock(bootstrap?: AuthBootstrap): AuthService {
 }
 
 describe("AuthController", () => {
+  it("declares explicit AuthService injection token", () => {
+    const dependencies = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, AuthController) as Array<{
+      index: number;
+      param: unknown;
+    }>;
+
+    expect(dependencies).toEqual(expect.arrayContaining([{ index: 0, param: AuthService }]));
+  });
+
   it("responds with bootstrap data from GET /auth/me", async () => {
     const service = createServiceMock();
     const controller = new AuthController(service);

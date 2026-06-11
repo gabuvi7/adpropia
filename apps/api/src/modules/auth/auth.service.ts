@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import type { TenantRole } from "@adpropia/shared";
 import { isTenantRole } from "../../common/auth/auth-role";
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -16,7 +16,9 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
   ) {}
 

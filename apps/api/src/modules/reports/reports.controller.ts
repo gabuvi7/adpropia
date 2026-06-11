@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Query } from "@nestjs/common";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { REPORTS_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
@@ -12,7 +12,7 @@ import { ReportsService } from "./reports.service";
 
 @Controller("reports")
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(@Inject(ReportsService) private readonly reportsService: ReportsService) {}
 
   @Get("renter-history/:renterId")
   @RequiresRole(...REPORTS_PERMISSIONS.renterHistory)

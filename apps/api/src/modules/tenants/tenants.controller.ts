@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { TENANTS_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
@@ -7,7 +7,7 @@ import { TenantsService } from "./tenants.service";
 
 @Controller("tenants")
 export class TenantsController {
-  constructor(private readonly tenantsService: TenantsService) {}
+  constructor(@Inject(TenantsService) private readonly tenantsService: TenantsService) {}
 
   @Post()
   @RequiresRole(...TENANTS_PERMISSIONS.create)

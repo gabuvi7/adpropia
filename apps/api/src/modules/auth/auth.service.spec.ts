@@ -1,7 +1,10 @@
 import { UnauthorizedException } from "@nestjs/common";
+import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma/prisma.service";
+import { PrismaService as PrismaServiceToken } from "../../common/prisma/prisma.service";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
+import { RequestContextService as RequestContextServiceToken } from "../../common/request-context/request-context.service";
 import { AuthService, type AuthBootstrap } from "./auth.service";
 
 function createContextServiceMock(ctx?: { userId: string; tenantId: string; role: string }): RequestContextService {
@@ -25,6 +28,18 @@ function createPrismaMock(tenant: { name: string } | null = { name: "Test Agency
 }
 
 describe("AuthService", () => {
+  it("declares explicit injection tokens", () => {
+    const dependencies = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, AuthService) as Array<{
+      index: number;
+      param: unknown;
+    }>;
+
+    expect(dependencies).toEqual(expect.arrayContaining([
+      { index: 0, param: RequestContextServiceToken },
+      { index: 1, param: PrismaServiceToken }
+    ]));
+  });
+
   it("returns bootstrap payload from request context and tenant", async () => {
     const ctxService = createContextServiceMock();
     const prisma = createPrismaMock({ name: "Mi Agencia" });

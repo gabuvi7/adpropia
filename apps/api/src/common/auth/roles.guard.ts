@@ -2,6 +2,7 @@ import {
   type CanActivate,
   type ExecutionContext,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger
 } from "@nestjs/common";
@@ -36,8 +37,11 @@ export class RolesGuard implements CanActivate {
   private readonly logger = new Logger(RolesGuard.name);
 
   constructor(
+    @Inject(Reflector)
     private readonly reflector: Reflector,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Inject(ConfigService)
     private readonly configService: ConfigService
   ) {}
 

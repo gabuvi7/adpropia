@@ -1,4 +1,4 @@
-import { Injectable, type NestMiddleware, UnauthorizedException } from "@nestjs/common";
+import { HttpException, Inject, Injectable, type NestMiddleware, UnauthorizedException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { RequestContextService } from "../request-context/request-context.service";
 import { Auth0TenantResolver } from "./auth0-tenant-resolver";
@@ -11,11 +11,22 @@ function firstHeader(headers: Record<string, string | string[] | undefined>, nam
   return Array.isArray(value) ? value[0] : value;
 }
 
+function invalidTokenMessage(err: unknown): string {
+  if (process.env.NODE_ENV === "production" || !(err instanceof Error) || !err.message) {
+    return "Token invalido.";
+  }
+
+  return `Token invalido. Detalle: ${err.message}`;
+}
+
 @Injectable()
 export class Auth0JwtMiddleware implements NestMiddleware {
   constructor(
+    @Inject(Auth0JwtService)
     private readonly jwtService: Auth0JwtService,
+    @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Inject(Auth0TenantResolver)
     private readonly tenantResolver: Auth0TenantResolver
   ) {}
 
@@ -39,11 +50,15 @@ export class Auth0JwtMiddleware implements NestMiddleware {
       return;
     }
 
-    const claims = await this.jwtService.verifyAndDecode(token).catch(() => {
-      throw new UnauthorizedException("Token invalido.");
+    const claims = await this.jwtService.verifyAndDecode(token).catch((err: unknown) => {
+      throw new UnauthorizedException(invalidTokenMessage(err));
     });
 
-    const resolution = await this.tenantResolver.resolve(claims).catch(() => {
+    const resolution = await this.tenantResolver.resolve(claims).catch((err: unknown) => {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
       throw new UnauthorizedException("Acceso denegado.");
     });
 

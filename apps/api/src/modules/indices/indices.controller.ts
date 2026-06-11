@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Post } from "@nestjs/common";
 import { CORE_ENTITY_PERMISSIONS } from "../../common/auth/permissions";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { parseRequestBody } from "../../common/validation/zod-validation";
@@ -7,7 +7,7 @@ import { IndicesService } from "./indices.service";
 
 @Controller("indices")
 export class IndicesController {
-  constructor(private readonly indicesService: IndicesService) {}
+  constructor(@Inject(IndicesService) private readonly indicesService: IndicesService) {}
 
   @Post("published-values")
   @RequiresRole(...CORE_ENTITY_PERMISSIONS.update)

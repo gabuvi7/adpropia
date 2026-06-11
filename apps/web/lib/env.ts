@@ -7,6 +7,10 @@ const serverEnvSchema = z.object({
   AUTH0_CLIENT_ID: z.string().min(1, "AUTH0_CLIENT_ID is required"),
   AUTH0_CLIENT_SECRET: z.string().min(1, "AUTH0_CLIENT_SECRET is required"),
   AUTH0_AUDIENCE: z.string().url("AUTH0_AUDIENCE must be a valid URL"),
+  AUTH0_ORGANIZATION_ID: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() ? value.trim() : undefined),
+    z.string().optional(),
+  ),
   ADPROPIA_API_BASE_URL: z.string().url("ADPROPIA_API_BASE_URL must be a valid URL"),
 });
 

@@ -1,9 +1,13 @@
 import { ForbiddenException, Logger, type ExecutionContext } from "@nestjs/common";
+import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import type { ConfigService } from "@nestjs/config";
+import { ConfigService as ConfigServiceToken } from "@nestjs/config";
 import type { Reflector } from "@nestjs/core";
+import { Reflector as ReflectorToken } from "@nestjs/core";
 import type { AuthRole } from "./auth-role";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RequestContextService } from "../request-context/request-context.service";
+import { RequestContextService as RequestContextServiceToken } from "../request-context/request-context.service";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
 import { RolesGuard, AUTH_ROLE_ENFORCEMENT_KEY } from "./roles.guard";
 
@@ -76,6 +80,19 @@ describe("RolesGuard", () => {
   afterEach(() => {
     warnSpy.mockRestore();
     logSpy.mockRestore();
+  });
+
+  it("declares explicit injection tokens", () => {
+    const dependencies = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, RolesGuard) as Array<{
+      index: number;
+      param: unknown;
+    }>;
+
+    expect(dependencies).toEqual(expect.arrayContaining([
+      { index: 0, param: ReflectorToken },
+      { index: 1, param: RequestContextServiceToken },
+      { index: 2, param: ConfigServiceToken }
+    ]));
   });
 
   describe("enforcement=true", () => {

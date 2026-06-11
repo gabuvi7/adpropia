@@ -17,6 +17,25 @@ describe("parseServerEnv", () => {
     expect(result.AUTH0_DOMAIN).toBe("dev-adpropia.us.auth0.com");
     expect(result.AUTH0_AUDIENCE).toBe("https://api.adpropia.com.ar");
     expect(result.ADPROPIA_API_BASE_URL).toBe("http://localhost:3001");
+    expect(result.AUTH0_ORGANIZATION_ID).toBeUndefined();
+  });
+
+  it("parses a configured Auth0 organization id", () => {
+    const result = parseServerEnv({
+      ...validEnv,
+      AUTH0_ORGANIZATION_ID: "org_abc123",
+    });
+
+    expect(result.AUTH0_ORGANIZATION_ID).toBe("org_abc123");
+  });
+
+  it("treats an empty Auth0 organization id as absent", () => {
+    const result = parseServerEnv({
+      ...validEnv,
+      AUTH0_ORGANIZATION_ID: "   ",
+    });
+
+    expect(result.AUTH0_ORGANIZATION_ID).toBeUndefined();
   });
 
   it("throws when AUTH0_SECRET is missing", () => {
