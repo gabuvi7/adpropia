@@ -27,3 +27,9 @@ reports/mutation/
 skill-registry.md
 
 /openspec/*
+
+.opencode
+
+.stryker-tmp/*
+
+tsconfig.tsbuildinfo

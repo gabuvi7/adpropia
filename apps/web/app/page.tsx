@@ -1,19 +1,17 @@
-import { Button } from "@/components/ui/button";
-import { AppShell } from "../components/shared/app-shell";
+import { FinalCta, LandingHero, ProcessSection, ProofSection, PublicHeader, type LandingCta } from "@/components/landing/public-landing";
+
+const cta: LandingCta = { href: "/auth/login", label: "Ingresar al panel" };
 
 export default function LandingPage() {
   return (
-    <AppShell tenantName="AdPropIA">
-      <section className="hero">
-        <p className="eyebrow">Base SaaS multi-cliente</p>
-        <h1>Gestión inmobiliaria con aislamiento por cliente desde el día uno.</h1>
-        <p>
-          Primer módulo base para propietarios, inquilinos, propiedades, contratos, pagos, caja, liquidaciones y auditoría.
-        </p>
-        <Button asChild>
-          <a href="/auth/login">Iniciar sesión</a>
-        </Button>
-      </section>
-    </AppShell>
+    <>
+      <PublicHeader cta={cta} />
+      <main id="contenido" tabIndex={-1} className="scroll-mt-24">
+        <LandingHero cta={cta} />
+        <ProofSection />
+        <ProcessSection />
+      </main>
+      <FinalCta cta={cta} />
+    </>
   );
 }
