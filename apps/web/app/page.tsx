@@ -1,11 +1,11 @@
 import { FinalCta, LandingHero, ProcessSection, ProofSection, PublicHeader, type LandingCta } from "@/components/landing/public-landing";
 
-const cta: LandingCta = { href: "/auth/login", label: "Ingresar al panel" };
+const cta: LandingCta = { href: "/request-access", label: "Solicitar acceso" };
 
 export default function LandingPage() {
   return (
     <>
-      <PublicHeader cta={cta} />
+      <PublicHeader />
       <main id="contenido" tabIndex={-1} className="scroll-mt-24">
         <LandingHero cta={cta} />
         <ProofSection />

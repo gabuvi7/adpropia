@@ -2,6 +2,10 @@ import { PrismaClient } from "@prisma/client";
 
 export { PrismaClient };
 export type {
+  AccessPlan,
+  AccessRequest,
+  AccessRequestModule,
+  AccessRequestStatus,
   CashMovement,
   CashMovementType,
   ContractAdjustment,

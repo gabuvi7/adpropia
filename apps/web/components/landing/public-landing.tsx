@@ -1,5 +1,9 @@
+import { PublicSiteHeader } from "@/components/public-site-header";
+import Link from "next/link";
+import type { Route } from "next";
+
 export type LandingCta = Readonly<{
-  href: "/auth/login";
+  href: "/auth/login" | "/request-access";
   label: string;
 }>;
 
@@ -39,33 +43,21 @@ function CtaLink({ cta, variant = "primary" }: CtaProps & Readonly<{ variant?: "
       : "landing-focus inline-flex min-h-12 items-center justify-center bg-white px-6 text-sm font-semibold text-[#0355e8] shadow-lg shadow-[#0355e8]/20 transition-colors duration-200 hover:bg-[#1472fa] hover:text-white";
 
   return (
-    <a href={cta.href} className={classes}>
+    <Link href={cta.href as Route} className={classes}>
       {cta.label}
-    </a>
+    </Link>
   );
 }
 
-export function PublicHeader({ cta }: CtaProps) {
+export function PublicHeader() {
   return (
-    <header className="relative bg-white">
-      <a href="#contenido" className="landing-focus sr-only focus:not-sr-only focus:absolute focus:left-6 focus:top-4 focus:z-10 focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-[#0355e8]">
-        Saltar al contenido principal
-      </a>
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-6">
-        <a href="/" className="landing-focus flex min-h-12 items-center gap-3" aria-label="AdPropIA inicio">
-          <span className="size-10 border border-[#0b1738]/20 bg-[#0b1738] shadow-lg shadow-[#0355e8]/20" aria-hidden="true" />
-          <span className="flex flex-col leading-tight">
-            <strong className="text-base tracking-[-0.04em] text-[#0b1738]">AdPropIA</strong>
-            <span className="text-xs font-medium text-[#0355e8]">Gestión inmobiliaria</span>
-          </span>
-        </a>
-        <nav aria-label="Navegación principal" className="hidden items-center gap-7 text-sm font-semibold text-[#0b1738] sm:flex">
-          <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#control">Control</a>
-          <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#proceso">Proceso</a>
-          <a className="landing-focus inline-flex min-h-11 items-center text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href={cta.href}>{cta.label}</a>
-        </nav>
-      </div>
-    </header>
+    <PublicSiteHeader eyebrow="Gestión inmobiliaria">
+      <nav aria-label="Navegación principal" className="hidden items-center gap-7 text-sm font-semibold text-[#0b1738] sm:flex">
+        <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#control">Control</a>
+        <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#proceso">Proceso</a>
+        <Link className="landing-focus inline-flex min-h-11 items-center text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href="/auth/login">Ingresar al panel</Link>
+      </nav>
+    </PublicSiteHeader>
   );
 }
 

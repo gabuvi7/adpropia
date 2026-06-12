@@ -11,7 +11,7 @@ function renderHome() {
 }
 
 describe("LandingPage", () => {
-  it("renders the public landing with an anonymous login CTA", () => {
+  it("renders the public landing with a request-access CTA", () => {
     const html = renderHome();
 
     expect(html).toContain("Control inmobiliario para operar cartera, contratos y caja");
@@ -22,9 +22,10 @@ describe("LandingPage", () => {
     expect(html).toContain("Desarrollado por GU Solutions");
     expect(html).not.toContain("Por GU Solutions");
     expect(html).not.toMatch(/MVP|roadmap/i);
+    expect(html).toContain("href=\"/request-access\"");
     expect(html).toContain("href=\"/auth/login\"");
+    expect(html).toContain("Solicitar acceso");
     expect(html).toContain("Ingresar al panel");
-    expect(html).not.toContain("Solicitar acceso");
     expect(html).not.toContain("Espacio de trabajo con aislamiento por cliente");
   });
 
