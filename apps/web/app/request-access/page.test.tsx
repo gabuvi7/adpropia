@@ -6,9 +6,10 @@ describe("RequestAccessPage", () => {
   it("renders the public assisted intake page", () => {
     const html = renderToStaticMarkup(<RequestAccessPage />);
 
-    expect(html).toContain("Encontrá el plan correcto para tu operación");
-    expect(html).toContain("cotizador asistido comercial");
-    expect(html).toContain("Plan recomendado");
-    expect(html).toContain("no crea aprovisionamiento automático");
+    expect(html).toContain("Pedí acceso con una referencia clara de plan y precio");
+    expect(html).toContain("Promo: 20% menos los primeros 3 meses");
+    expect(html).toContain("Cotizador en vivo");
+    expect(html).toContain("Cotización en vivo");
+    expect(html).toContain("sin crear accesos automáticamente");
   });
 });

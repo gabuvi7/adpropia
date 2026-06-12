@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accessPlanDisplayMetadata,
   accessPlanLabels,
   accessRequestModules,
   accessRequestSchema,
@@ -16,6 +17,55 @@ describe("access request domain", () => {
 
     expect(recommendation.plan).toBe("INICIAL");
     expect(accessPlanLabels[recommendation.plan]).toBe("Inicial");
+  });
+
+  it("exposes public monthly prices and plan benefits from shared metadata", () => {
+    const recommendation = recommendAccessPlan({ rentalAdministrationUnits: 180, saleUnits: 15, users: 5 });
+
+    expect(recommendation.display.monthlyPriceLabel).toBe("ARS 119.000/mes");
+    expect(recommendation.display.benefits).toContain("Hasta 200 unidades en alquiler/administración.");
+    expect(recommendation.display.benefits).toContain("Liquidaciones, reportes y automatismos para bajar tareas repetidas.");
+    expect(recommendation.message).toContain("Te recomendamos el plan Profesional como punto de partida");
+    expect(recommendation.message).toContain("Este precio te sirve como referencia");
+    expect(accessPlanDisplayMetadata.INICIAL.monthlyPriceLabel).toBe("ARS 49.000/mes");
+    expect(accessPlanDisplayMetadata.OPERATIVO.monthlyPriceLabel).toBe("ARS 229.000/mes");
+    expect(accessPlanDisplayMetadata.A_MEDIDA.monthlyPriceLabel).toBe("Consultar");
+  });
+
+  it("exposes the 20% launch promo for fixed-price public plans", () => {
+    expect(accessPlanDisplayMetadata.INICIAL.promo).toMatchObject({
+      label: "20% menos los primeros 3 meses",
+      durationMonths: 3,
+      discountedPriceCents: 39_200_00,
+      percentOff: 20
+    });
+    expect(accessPlanDisplayMetadata.PROFESIONAL.promo?.discountedPriceCents).toBe(95_200_00);
+    expect(accessPlanDisplayMetadata.OPERATIVO.promo?.discountedPriceCents).toBe(183_200_00);
+    expect(accessPlanDisplayMetadata.A_MEDIDA.promo).toBeUndefined();
+  });
+
+  it("explains why a plan is recommended and when the next threshold applies", () => {
+    const recommendation = recommendAccessPlan({ rentalAdministrationUnits: 180, saleUnits: 15, users: 5 });
+
+    expect(recommendation.whyThisPlan).toBe(
+      "Tu operación entra en este tramo por 180 unidades de alquiler/administración y 5 usuarios."
+    );
+    expect(recommendation.nextThresholdHint).toBe(
+      "Si superás 200 unidades o 5 usuarios, pasás al siguiente plan."
+    );
+    expect(recommendation.saleUnitsNote).toBe(
+      "15 unidades en venta quedan registradas aparte: no suben el plan recomendado."
+    );
+  });
+
+  it("explains A medida without exposing a fixed promo", () => {
+    const recommendation = recommendAccessPlan({ rentalAdministrationUnits: 501, saleUnits: 30, users: 10 });
+
+    expect(recommendation.plan).toBe("A_MEDIDA");
+    expect(recommendation.display.monthlyPriceLabel).toBe("Consultar");
+    expect(recommendation.display.promo).toBeUndefined();
+    expect(recommendation.whyThisPlan).toContain("supera los tramos públicos");
+    expect(recommendation.nextThresholdHint).toBeUndefined();
   });
 
   it("recommends Profesional and Operativo at their published thresholds", () => {
