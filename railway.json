@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "pnpm --filter @adpropia/database prisma:generate && pnpm --filter @adpropia/api typecheck"
+  },
+  "deploy": {
+    "preDeployCommand": ["pnpm --filter @adpropia/database prisma:migrate:deploy"],
+    "startCommand": "pnpm --filter @adpropia/api start:railway",
+    "restartPolicyType": "ALWAYS"
+  }
+}
