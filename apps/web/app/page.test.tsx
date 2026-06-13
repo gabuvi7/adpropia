@@ -22,11 +22,19 @@ describe("LandingPage", () => {
     expect(html).toContain("Desarrollado por GU Solutions");
     expect(html).not.toContain("Por GU Solutions");
     expect(html).not.toMatch(/MVP|roadmap/i);
+    expect(html).not.toMatch(/multi-cliente/i);
     expect(html).toContain("href=\"/request-access\"");
+    expect(html).toContain("href=\"/pricing\"");
     expect(html).toContain("href=\"/auth/login\"");
     expect(html).toContain("Solicitar acceso");
+    expect(html).toContain("Ver precios");
     expect(html).toContain("Ingresar al panel");
     expect(html).not.toContain("Espacio de trabajo con aislamiento por cliente");
+    expect(html).not.toContain("ARS 49.000/mes");
+    expect(html).not.toContain("ARS 119.000/mes");
+    expect(html).not.toContain("ARS 229.000/mes");
+    expect(html).not.toContain("Más elegido");
+    expect(html).not.toContain("Planes mensuales");
   });
 
   it("uses semantic landmarks, one h1, and ordered section headings", () => {

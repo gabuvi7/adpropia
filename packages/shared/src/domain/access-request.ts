@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { publicPricingPlansById } from "./public-pricing";
+import type { PublicPricingPlan } from "./public-pricing";
 
 export const accessPlans = ["INICIAL", "PROFESIONAL", "OPERATIVO", "A_MEDIDA"] as const;
 export type AccessPlan = (typeof accessPlans)[number];
@@ -10,12 +12,7 @@ export const accessPlanLabels: Record<AccessPlan, string> = {
   A_MEDIDA: "A medida"
 };
 
-export type AccessPlanDisplayMetadata = Readonly<{
-  monthlyPriceLabel: string;
-  monthlyPriceCents?: number;
-  promo?: AccessPlanPromoMetadata;
-  benefits: readonly string[];
-}>;
+export type AccessPlanDisplayMetadata = PublicPricingPlan;
 
 export type AccessPlanPromoMetadata = Readonly<{
   label: string;
@@ -25,76 +22,7 @@ export type AccessPlanPromoMetadata = Readonly<{
   note?: string;
 }>;
 
-type PublicPlanThreshold = Readonly<{
-  maxRentalAdministrationUnits: number;
-  maxUsers: number;
-}>;
-
-const publicPlanThresholds = {
-  INICIAL: { maxRentalAdministrationUnits: 50, maxUsers: 2 },
-  PROFESIONAL: { maxRentalAdministrationUnits: 200, maxUsers: 5 },
-  OPERATIVO: { maxRentalAdministrationUnits: 500, maxUsers: 10 }
-} as const satisfies Record<Exclude<AccessPlan, "A_MEDIDA">, PublicPlanThreshold>;
-
-const launchPromo = {
-  durationMonths: 3,
-  percentOff: 20
-} as const;
-
-function createLaunchPromo(monthlyPriceCents: number): AccessPlanPromoMetadata {
-  return {
-    label: "20% menos los primeros 3 meses",
-    durationMonths: launchPromo.durationMonths,
-    discountedPriceCents: calculateDiscountedPriceCents(monthlyPriceCents, launchPromo.percentOff),
-    percentOff: launchPromo.percentOff,
-    note: "Promoción de lanzamiento para planes con precio público mensual."
-  };
-}
-
-function calculateDiscountedPriceCents(monthlyPriceCents: number, percentOff: number) {
-  return Math.round((monthlyPriceCents * (100 - percentOff)) / 100);
-}
-
-export const accessPlanDisplayMetadata: Record<AccessPlan, AccessPlanDisplayMetadata> = {
-  INICIAL: {
-    monthlyPriceLabel: "ARS 49.000/mes",
-    monthlyPriceCents: 49_000_00,
-    promo: createLaunchPromo(49_000_00),
-    benefits: [
-      "Hasta 50 unidades en alquiler/administración.",
-      "Hasta 2 usuarios para trabajar el día a día.",
-      "Contratos, ajustes, cobros y seguimiento operativo en un solo lugar."
-    ]
-  },
-  PROFESIONAL: {
-    monthlyPriceLabel: "ARS 119.000/mes",
-    monthlyPriceCents: 119_000_00,
-    promo: createLaunchPromo(119_000_00),
-    benefits: [
-      "Hasta 200 unidades en alquiler/administración.",
-      "Hasta 5 usuarios para coordinar el equipo.",
-      "Liquidaciones, reportes y automatismos para bajar tareas repetidas."
-    ]
-  },
-  OPERATIVO: {
-    monthlyPriceLabel: "ARS 229.000/mes",
-    monthlyPriceCents: 229_000_00,
-    promo: createLaunchPromo(229_000_00),
-    benefits: [
-      "Hasta 500 unidades en alquiler/administración.",
-      "Hasta 10 usuarios para equipos con mayor volumen.",
-      "Más control para revisar reportes, auditoría y recordatorios sin perder trazabilidad."
-    ]
-  },
-  A_MEDIDA: {
-    monthlyPriceLabel: "Consultar",
-    benefits: [
-      "Para operaciones que superan 500 unidades o 10 usuarios.",
-      "Alcance definido según volumen operativo y forma de trabajo.",
-      "Lo revisamos juntos antes de confirmar condiciones finales."
-    ]
-  }
-};
+export const accessPlanDisplayMetadata: Record<AccessPlan, AccessPlanDisplayMetadata> = publicPricingPlansById;
 
 export const accessRequestModuleValues = [
   "RENTALS_AND_CONTRACTS",
@@ -156,6 +84,7 @@ export type AccessPlanRecommendation = Readonly<{
 export function recommendAccessPlan(input: AccessPlanRecommendationInput): AccessPlanRecommendation {
   const plan = resolveAccessPlan(input.rentalAdministrationUnits, input.users);
   const nextPublicPlan = getNextPublicPlan(plan);
+  const nextThresholdHint = nextPublicPlan ? getNextThresholdHint(nextPublicPlan) : undefined;
 
   return {
     plan,
@@ -166,7 +95,7 @@ export function recommendAccessPlan(input: AccessPlanRecommendationInput): Acces
     saleUnitsCapturedSeparately: input.saleUnits,
     message: `Te recomendamos el plan ${accessPlanLabels[plan]} como punto de partida. Este precio te sirve como referencia; después confirmamos juntos si encaja con tu operación.`,
     whyThisPlan: getPlanExplanation(plan, input.rentalAdministrationUnits, input.users),
-    ...(nextPublicPlan ? { nextThresholdHint: getNextThresholdHint(nextPublicPlan) } : {}),
+    ...(nextThresholdHint ? { nextThresholdHint } : {}),
     saleUnitsNote: `${input.saleUnits} unidades en venta quedan registradas aparte: no suben el plan recomendado.`
   };
 }
@@ -194,6 +123,8 @@ function getNextPublicPlan(plan: AccessPlan): Exclude<AccessPlan, "A_MEDIDA"> | 
 }
 
 function getNextThresholdHint(plan: Exclude<AccessPlan, "A_MEDIDA">) {
-  const threshold = publicPlanThresholds[plan];
+  const threshold = publicPricingPlansById[plan].thresholds;
+  if (!threshold) return undefined;
+
   return `Si superás ${threshold.maxRentalAdministrationUnits} unidades o ${threshold.maxUsers} usuarios, pasás al siguiente plan.`;
 }

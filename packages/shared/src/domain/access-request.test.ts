@@ -6,6 +6,7 @@ import {
   accessRequestSchema,
   recommendAccessPlan
 } from "./access-request";
+import { publicPricingPlansById, publicPricingTerms } from "./public-pricing";
 
 describe("access request domain", () => {
   it("recommends Inicial when rental/administration units and users fit the first threshold", () => {
@@ -22,17 +23,20 @@ describe("access request domain", () => {
   it("exposes public monthly prices and plan benefits from shared metadata", () => {
     const recommendation = recommendAccessPlan({ rentalAdministrationUnits: 180, saleUnits: 15, users: 5 });
 
+    expect(recommendation.display).toBe(publicPricingPlansById.PROFESIONAL);
     expect(recommendation.display.monthlyPriceLabel).toBe("ARS 119.000/mes");
     expect(recommendation.display.benefits).toContain("Hasta 200 unidades en alquiler/administración.");
     expect(recommendation.display.benefits).toContain("Liquidaciones, reportes y automatismos para bajar tareas repetidas.");
     expect(recommendation.message).toContain("Te recomendamos el plan Profesional como punto de partida");
     expect(recommendation.message).toContain("Este precio te sirve como referencia");
     expect(accessPlanDisplayMetadata.INICIAL.monthlyPriceLabel).toBe("ARS 49.000/mes");
+    expect(accessPlanDisplayMetadata.INICIAL).toBe(publicPricingPlansById.INICIAL);
     expect(accessPlanDisplayMetadata.OPERATIVO.monthlyPriceLabel).toBe("ARS 229.000/mes");
     expect(accessPlanDisplayMetadata.A_MEDIDA.monthlyPriceLabel).toBe("Consultar");
   });
 
   it("exposes the 20% launch promo for fixed-price public plans", () => {
+    expect(publicPricingTerms.monthlyPromo).toEqual({ percentOff: 20, durationMonths: 3, stackable: false });
     expect(accessPlanDisplayMetadata.INICIAL.promo).toMatchObject({
       label: "20% menos los primeros 3 meses",
       durationMonths: 3,

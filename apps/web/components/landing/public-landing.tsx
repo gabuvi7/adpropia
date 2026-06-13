@@ -1,9 +1,9 @@
-import { PublicSiteHeader } from "@/components/public-site-header";
+import { PUBLIC_HOME_NAV_ITEMS, PublicSiteHeader, PublicSiteNav } from "@/components/public-site-header";
 import Link from "next/link";
 import type { Route } from "next";
 
 export type LandingCta = Readonly<{
-  href: "/auth/login" | "/request-access";
+  href: "/auth/login" | "/pricing" | "/request-access";
   label: string;
 }>;
 
@@ -36,6 +36,8 @@ const processSteps = [
   "Confirmá el cambio con cálculo, fecha efectiva y evidencia trazable antes de comunicar o liquidar.",
 ] as const;
 
+const pricingCta: LandingCta = { href: "/pricing", label: "Ver planes y precios" };
+
 function CtaLink({ cta, variant = "primary" }: CtaProps & Readonly<{ variant?: "primary" | "secondary" }>) {
   const classes =
     variant === "primary"
@@ -52,11 +54,7 @@ function CtaLink({ cta, variant = "primary" }: CtaProps & Readonly<{ variant?: "
 export function PublicHeader() {
   return (
     <PublicSiteHeader eyebrow="Gestión inmobiliaria">
-      <nav aria-label="Navegación principal" className="hidden items-center gap-7 text-sm font-semibold text-[#0b1738] sm:flex">
-        <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#control">Control</a>
-        <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#proceso">Proceso</a>
-        <Link className="landing-focus inline-flex min-h-11 items-center text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href="/auth/login">Ingresar al panel</Link>
-      </nav>
+      <PublicSiteNav items={PUBLIC_HOME_NAV_ITEMS} />
     </PublicSiteHeader>
   );
 }
@@ -66,7 +64,7 @@ export function LandingHero({ cta }: CtaProps) {
     <section aria-labelledby="landing-title" className="overflow-hidden bg-white">
       <div className="mx-auto grid max-w-6xl gap-14 px-6 pb-20 pt-12 md:grid-cols-[0.95fr_1.05fr] md:pb-24 md:pt-20">
         <div className="max-w-3xl">
-          <p className="mb-6 text-sm font-semibold uppercase tracking-[0.32em] text-[#0355e8]">SaaS inmobiliario multi-cliente</p>
+          <p className="mb-6 text-sm font-semibold uppercase tracking-[0.32em] text-[#0355e8]">SaaS inmobiliario operativo</p>
           <h1 id="landing-title" className="landing-balance text-5xl font-semibold leading-[0.92] tracking-[-0.075em] text-[#0b1738] sm:text-7xl">
             Control inmobiliario para operar cartera, contratos y caja
           </h1>
@@ -78,6 +76,7 @@ export function LandingHero({ cta }: CtaProps) {
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <CtaLink cta={cta} />
+            <CtaLink cta={pricingCta} variant="secondary" />
             <a className="landing-focus inline-flex min-h-12 items-center px-1 text-sm font-semibold text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href="#control">Ver cómo ordena la operación</a>
           </div>
         </div>
@@ -167,9 +166,12 @@ export function FinalCta({ cta }: CtaProps) {
         <div>
           <p className="mb-4 text-sm font-semibold uppercase tracking-[0.28em] text-[#0355e8]">Control sin teatro visual</p>
           <h2 id="final-cta-title" className="landing-balance text-4xl font-semibold tracking-[-0.055em]">Ordená la operación antes de escalarla</h2>
-          <p className="landing-pretty mt-4 max-w-2xl leading-7">AdPropIA prepara una base sólida para crecer sin mezclar clientes, datos ni responsabilidades.</p>
+          <p className="landing-pretty mt-4 max-w-2xl leading-7">AdPropIA prepara una base sólida para crecer con procesos, datos y responsabilidades claras.</p>
         </div>
-        <CtaLink cta={cta} />
+        <div className="flex flex-wrap items-center gap-4 md:justify-end">
+          <CtaLink cta={cta} />
+          <CtaLink cta={{ href: "/pricing", label: "Comparar planes" }} variant="secondary" />
+        </div>
       </div>
       <div className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-[#0b1738]/10 pt-5 text-xs font-medium text-[#0b1738]/60 sm:flex-row sm:items-center sm:justify-between">
         <p>© AdPropIA</p>

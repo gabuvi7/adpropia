@@ -3,6 +3,8 @@
 import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
+  getFixedPlanDiscountedPriceCents,
+  publicPricingTerms,
   recommendAccessPlan,
   type AccessPlanPromoMetadata,
   type AccessPlanRecommendationInput,
@@ -121,7 +123,7 @@ export function RequestAccessForm({
       action="/api/access-requests"
       method="POST"
       onSubmit={handleSubmit}
-      className="grid gap-6"
+      className="grid gap-10"
       aria-describedby="request-access-status request-access-note"
     >
       <Fieldset
@@ -129,8 +131,8 @@ export function RequestAccessForm({
         title="Tres datos para recomendarte un punto de partida"
         description="Alquileres/administración y usuarios definen el tramo. Las unidades en venta se registran aparte y quedan incluidas sin cargo durante los primeros 6 meses."
       >
-        <div className="grid min-w-0 gap-4">
-          <div className="grid min-w-0 gap-4 md:grid-cols-3">
+        <div className="grid min-w-0 gap-7">
+          <div className="grid min-w-0 gap-5 md:grid-cols-3">
             <NumberField
               id="rentalAdministrationUnits"
               label="Alquileres / administración"
@@ -196,7 +198,11 @@ export function RequestAccessForm({
         description="Después confirmamos juntos si el plan y el precio encajan con tu operación, sin crear accesos automáticamente."
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="companyName" label="Empresa" autoComplete="organization" />
+          <Field
+            id="companyName"
+            label="Inmobiliaria"
+            autoComplete="organization"
+          />
           <Field
             id="contactName"
             label="Nombre de contacto"
@@ -232,12 +238,12 @@ function Fieldset({
   children: ReactNode;
 }>) {
   return (
-    <fieldset className="grid min-w-0 gap-5 border border-[#0b1738]/10 bg-white p-5 shadow-xl shadow-[#0355e8]/8 sm:p-6">
+    <fieldset className="grid min-w-0 gap-6 border-t border-[#0b1738]/10 bg-white pt-7 first:border-t-0 first:pt-0">
       <legend className="-ml-1 px-1">
         <span className="block text-xs font-bold uppercase tracking-[0.24em] text-[#0355e8]">
           {eyebrow}
         </span>
-        <span className="mt-2 block text-2xl font-semibold tracking-[-0.045em] text-[#0b1738]">
+        <span className="mt-2 block text-3xl font-semibold tracking-[-0.055em] text-[#0b1738]">
           {title}
         </span>
       </legend>
@@ -253,20 +259,30 @@ function LiveQuoteBand({
   recommendation,
 }: Readonly<{ recommendation: ReturnType<typeof recommendAccessPlan> }>) {
   const promoPriceLabel = getPromoPriceLabel(recommendation.display.promo);
+  const annualMonthlyPriceCents = getFixedPlanDiscountedPriceCents(
+    recommendation.plan,
+    "annual",
+  );
+  const annualMonthlyPriceLabel = annualMonthlyPriceCents
+    ? `${formatArgentinePesoCents(annualMonthlyPriceCents)}/mes equiv.`
+    : recommendation.display.monthlyPriceLabel;
+  const annualTotalLabel = annualMonthlyPriceCents
+    ? formatArgentinePesoCents(annualMonthlyPriceCents * 12)
+    : undefined;
 
   return (
     <section
       aria-labelledby="recommendation-title"
-      className="grid min-w-0 gap-4 border border-[#0355e8]/25 bg-[linear-gradient(135deg,#f5f9ff_0%,#ffffff_58%,#eef6ff_100%)] p-4 text-[#0b1738] shadow-lg shadow-[#0355e8]/10 sm:p-5"
+      className="grid min-w-0 gap-6 border border-[#0355e8]/18 bg-[#f7fbff] p-5 text-[#0b1738] shadow-sm shadow-[#0355e8]/8 sm:p-6"
     >
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:items-center">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:items-end">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#0355e8]">
             Cotización en vivo
           </p>
           <h2
             id="recommendation-title"
-            className="mt-2 text-3xl font-semibold tracking-[-0.055em] text-[#0b1738]"
+            className="mt-2 text-4xl font-semibold tracking-[-0.065em] text-[#0b1738]"
           >
             Plan {recommendation.label}
           </h2>
@@ -277,44 +293,43 @@ function LiveQuoteBand({
         </div>
 
         <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
-          {promoPriceLabel ? (
-            <PriceTerm
-              label="Primeros 3 meses"
-              value={promoPriceLabel}
-              note={
-                recommendation.display.promo?.label ?? "Promo de lanzamiento"
-              }
-              featured
-            />
-          ) : null}
           <PriceTerm
-            label={
-              promoPriceLabel ? "Después de la promo" : "Precio de referencia"
-            }
-            value={recommendation.display.monthlyPriceLabel}
+            label="Mensual"
+            value={promoPriceLabel ?? recommendation.display.monthlyPriceLabel}
             note={
               promoPriceLabel
-                ? "Precio regular de referencia"
+                ? `Primeros ${recommendation.display.promo?.durationMonths ?? publicPricingTerms.monthlyPromo.durationMonths} meses. Luego ${recommendation.display.monthlyPriceLabel}.`
                 : "Requiere revisión comercial"
             }
-            featured={!promoPriceLabel}
+            featured
+          />
+          <PriceTerm
+            label="Anual"
+            value={annualMonthlyPriceLabel}
+            note={
+              annualTotalLabel
+                ? `Total anual ${annualTotalLabel}. 15% menos, precio congelado 12 meses y no acumulable con la promo mensual.`
+                : "Condiciones anuales a revisar con el equipo."
+            }
           />
         </dl>
       </div>
 
-      <div className="grid min-w-0 gap-3 border-t border-[#0355e8]/15 pt-4">
-        <div className="flex min-w-0 flex-wrap gap-2">
-          <ReasonChip value={recommendation.whyThisPlan} />
+      <div className="grid min-w-0 gap-3 border-y border-[#0b1738]/8 py-4">
+        <div className="grid min-w-0 gap-2 text-sm leading-6 text-[#0b1738]/76 md:grid-cols-3">
+          <ReasonNote value={recommendation.whyThisPlan} />
           {recommendation.nextThresholdHint ? (
-            <ReasonChip value={recommendation.nextThresholdHint} />
+            <ReasonNote value={recommendation.nextThresholdHint} />
           ) : null}
-          <ReasonChip value={recommendation.saleUnitsNote} />
+          {recommendation.saleUnitsCapturedSeparately > 0 ? (
+            <ReasonNote value={recommendation.saleUnitsNote} />
+          ) : null}
         </div>
       </div>
 
       <section
         aria-labelledby="plan-inclusions-title"
-        className="grid min-w-0 gap-3 border border-[#0355e8]/15 bg-white/80 p-3"
+        className="grid min-w-0 gap-3"
       >
         <div className="grid min-w-0 gap-1 sm:grid-cols-[auto_1fr] sm:items-baseline sm:gap-3">
           <h3
@@ -327,11 +342,11 @@ function LiveQuoteBand({
             Beneficios incluidos en el plan recomendado.
           </p>
         </div>
-        <ul className="grid min-w-0 gap-2 text-sm leading-6 text-[#0b1738]/75 sm:grid-cols-3">
+        <ul className="grid min-w-0 gap-2.5 text-sm leading-6 text-[#0b1738]/78 sm:grid-cols-3">
           {recommendation.display.benefits.map((benefit) => (
             <li
               key={benefit}
-              className="grid min-w-0 grid-cols-[auto_1fr] gap-2 rounded-sm border border-[#0b1738]/10 bg-white px-3 py-2"
+              className="grid min-w-0 grid-cols-[auto_1fr] gap-2"
             >
               <span
                 aria-hidden="true"
@@ -359,19 +374,19 @@ function PriceTerm({
 }>) {
   return (
     <div
-      className={`min-w-0 border px-3 py-3 ${featured ? "border-[#0355e8] bg-[#0355e8] text-white" : "border-[#0b1738]/10 bg-white text-[#0b1738]"}`}
+      className={`min-w-0 border px-4 py-4 ${featured ? "border-[#0355e8]/35 bg-white text-[#0b1738] shadow-sm shadow-[#0355e8]/8" : "border-[#0b1738]/10 bg-white/72 text-[#0b1738]"}`}
     >
       <dt
-        className={`text-[0.68rem] font-bold uppercase tracking-[0.18em] ${featured ? "text-white/75" : "text-[#0355e8]"}`}
+        className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#0355e8]"
       >
         {label}
       </dt>
-      <dd className="mt-1 min-w-0 break-words text-2xl font-semibold tracking-[-0.045em]">
+      <dd className="mt-2 min-w-0 break-words text-3xl font-semibold tracking-[-0.055em]">
         {value}
       </dd>
       {note ? (
         <dd
-          className={`mt-1 text-sm leading-6 ${featured ? "text-white/85" : "text-[#0b1738]/65"}`}
+          className="mt-2 text-sm leading-6 text-[#0b1738]/65"
         >
           {note}
         </dd>
@@ -380,11 +395,15 @@ function PriceTerm({
   );
 }
 
-function ReasonChip({ value }: Readonly<{ value: string }>) {
+function ReasonNote({ value }: Readonly<{ value: string }>) {
   return (
-    <span className="landing-pretty inline-flex rounded-full border border-[#0355e8]/15 bg-white px-3 py-2 text-xs font-semibold leading-5 text-[#0b1738]/75">
-      {value}
-    </span>
+    <p className="landing-pretty grid grid-cols-[auto_1fr] gap-2">
+      <span
+        aria-hidden="true"
+        className="mt-2 size-1.5 rounded-full bg-[#1472fa]"
+      />
+      <span>{value}</span>
+    </p>
   );
 }
 
@@ -394,11 +413,11 @@ function RequestFooter({
   message,
 }: Readonly<{ turnstileSiteKey: string; status: FormState; message: string }>) {
   return (
-    <div className="grid gap-4 border-t border-[#0b1738]/10 pt-5 lg:grid-cols-[1fr_20rem] lg:items-end">
+    <div className="grid gap-5 border-t border-[#0b1738]/10 pt-6 lg:grid-cols-[1fr_20rem] lg:items-end">
       <div>
         <p
           id="request-access-note"
-          className="landing-pretty border-l-4 border-[#0355e8] bg-[#1472fa]/10 px-4 py-3 text-sm font-semibold leading-6 text-[#0b1738]"
+          className="landing-pretty border-l border-[#0355e8]/35 bg-[#f7fbff] px-4 py-3 text-sm font-semibold leading-6 text-[#0b1738]"
         >
           Antes de enviar, tomá el plan recomendado como referencia. Las
           unidades en venta quedan incluidas sin cargo durante 6 meses y después
@@ -407,7 +426,7 @@ function RequestFooter({
         <div className="mt-4 grid gap-3">
           <input type="hidden" name="turnstileToken" />
           <div
-            className="cf-turnstile min-h-16 border border-dashed border-[#0b1738]/25 bg-[#0b1738]/5 p-4 text-sm text-[#0b1738]/60"
+            className="cf-turnstile min-h-16 border border-dashed border-[#0b1738]/20 bg-white p-4 text-sm text-[#0b1738]/60"
             data-sitekey={turnstileSiteKey}
             aria-label="Verificación anti-spam de Cloudflare Turnstile"
           />
@@ -531,7 +550,7 @@ function NumberField({
   const helpId = `${id}-help`;
 
   return (
-    <div className="grid min-w-0 gap-2 border border-[#0b1738]/10 bg-white p-3 shadow-sm shadow-[#0355e8]/5 sm:p-4">
+    <div className="grid min-w-0 gap-2">
       <label
         className="text-sm font-semibold leading-5 text-[#0b1738]"
         htmlFor={id}
@@ -549,7 +568,7 @@ function NumberField({
         aria-describedby={helpId}
         onChange={(event) => onChange(event.currentTarget.value)}
         onBlur={onBlur}
-        className="landing-focus min-h-11 w-full min-w-0 border border-[#0b1738]/20 px-3 text-base font-semibold text-[#0b1738] outline-none transition-colors duration-200 hover:border-[#0355e8]/60"
+        className="landing-focus min-h-12 w-full min-w-0 border border-[#0b1738]/20 bg-white px-3 text-base font-semibold text-[#0b1738] outline-none shadow-sm shadow-[#0355e8]/5 transition-colors duration-200 hover:border-[#0355e8]/60"
       />
       <p
         id={helpId}

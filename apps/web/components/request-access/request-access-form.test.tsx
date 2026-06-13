@@ -12,7 +12,8 @@ describe("RequestAccessForm", () => {
   it("renders all required intake fields and the Turnstile placeholder", () => {
     const html = renderToStaticMarkup(<RequestAccessForm turnstileSiteKey="site-key" />);
 
-    expect(html).toContain("Empresa");
+    expect(html).toContain("Inmobiliaria");
+    expect(html).not.toContain("Empresa");
     expect(html).toContain("Nombre de contacto");
     expect(html).toContain("Email");
     expect(html).toContain("WhatsApp o teléfono");
@@ -45,11 +46,14 @@ describe("RequestAccessForm", () => {
     expect(html).toContain("Profesional");
     expect(html).toContain("Por 180 unidades de alquiler/administración y 5 usuarios.");
     expect(html).not.toContain("Referencia, no recibo");
-    expect(html).toContain("Primeros 3 meses");
+    expect(html).toContain("Mensual");
     expect(html).toContain("ARS 95.200/mes");
-    expect(html).toContain("Después de la promo");
+    expect(html).toContain("Primeros 3 meses. Luego ARS 119.000/mes.");
     expect(html).toContain("ARS 119.000/mes");
-    expect(html).toContain("20% menos los primeros 3 meses");
+    expect(html).toContain("Anual");
+    expect(html).toContain("ARS 101.150/mes equiv.");
+    expect(html).toContain("Total anual ARS 1.213.800.");
+    expect(html).toContain("15% menos, precio congelado 12 meses y no acumulable con la promo mensual.");
     expect(html).toContain("Tu operación entra en este tramo por 180 unidades de alquiler/administración y 5 usuarios.");
     expect(html).toContain("Si superás 200 unidades o 5 usuarios, pasás al siguiente plan.");
     expect(html).toContain("900 unidades en venta quedan registradas aparte: no suben el plan recomendado.");
@@ -57,6 +61,14 @@ describe("RequestAccessForm", () => {
     expect(html).toContain("Liquidaciones, reportes y automatismos para bajar tareas repetidas.");
     expect(html).toContain("incluidas sin cargo durante 6 meses");
     expect(html).toContain("Quiero que revisen mi plan");
+  });
+
+  it("hides the sale units note when sale units are zero", () => {
+    const html = renderToStaticMarkup(<RequestAccessForm turnstileSiteKey="site-key" />);
+
+    expect(html).not.toContain(
+      "0 unidades en venta quedan registradas aparte: no suben el plan recomendado."
+    );
   });
 
   it("renders plan inclusions as visible benefits instead of a hidden details block", () => {
@@ -80,7 +92,7 @@ describe("RequestAccessForm", () => {
     });
   });
 
-  it("explains A medida without rendering a fixed promo", () => {
+  it("explains A medida without rendering fixed promo or fake annual pricing", () => {
     const html = renderToStaticMarkup(
       <RequestAccessForm
         turnstileSiteKey="site-key"
@@ -90,9 +102,12 @@ describe("RequestAccessForm", () => {
 
     expect(html).toContain("A medida");
     expect(html).toContain("Consultar");
+    expect(html).toContain("Condiciones anuales a revisar con el equipo.");
     expect(html).toContain("Tu operación necesita revisión porque supera los tramos públicos");
-    expect(html).not.toContain("Primeros 3 meses</dt><dd");
+    expect(html).not.toContain("Primeros 3 meses. Luego");
     expect(html).not.toContain("20% menos los primeros 3 meses");
+    expect(html).not.toContain("/mes equiv.");
+    expect(html).not.toContain("Total anual ARS");
   });
 
   it("hides the promo block when no promo is provided", () => {
