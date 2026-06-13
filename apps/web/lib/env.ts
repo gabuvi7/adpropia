@@ -14,10 +14,32 @@ const serverEnvSchema = z.object({
   ADPROPIA_API_BASE_URL: z.string().url("ADPROPIA_API_BASE_URL must be a valid URL"),
 });
 
+const accessRequestProxyEnvSchema = z.object({
+  ADPROPIA_API_BASE_URL: z.string().url("ADPROPIA_API_BASE_URL must be a valid URL"),
+});
+
+const clientEnvSchema = z.object({
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1, "NEXT_PUBLIC_TURNSTILE_SITE_KEY is required"),
+});
+
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export function parseServerEnv(
   env: Record<string, string | undefined>,
 ): ServerEnv {
   return serverEnvSchema.parse(env);
+}
+
+export type AccessRequestProxyEnv = z.infer<typeof accessRequestProxyEnvSchema>;
+
+export function parseAccessRequestProxyEnv(
+  env: Record<string, string | undefined>,
+): AccessRequestProxyEnv {
+  return accessRequestProxyEnvSchema.parse(env);
+}
+
+export type ClientEnv = z.infer<typeof clientEnvSchema>;
+
+export function parseClientEnv(env: Record<string, string | undefined>): ClientEnv {
+  return clientEnvSchema.parse(env);
 }

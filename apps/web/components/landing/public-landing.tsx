@@ -1,5 +1,9 @@
+import { PUBLIC_HOME_NAV_ITEMS, PublicSiteHeader, PublicSiteNav } from "@/components/public-site-header";
+import Link from "next/link";
+import type { Route } from "next";
+
 export type LandingCta = Readonly<{
-  href: "/auth/login";
+  href: "/auth/login" | "/pricing" | "/request-access";
   label: string;
 }>;
 
@@ -32,6 +36,8 @@ const processSteps = [
   "Confirmá el cambio con cálculo, fecha efectiva y evidencia trazable antes de comunicar o liquidar.",
 ] as const;
 
+const pricingCta: LandingCta = { href: "/pricing", label: "Ver planes y precios" };
+
 function CtaLink({ cta, variant = "primary" }: CtaProps & Readonly<{ variant?: "primary" | "secondary" }>) {
   const classes =
     variant === "primary"
@@ -39,33 +45,17 @@ function CtaLink({ cta, variant = "primary" }: CtaProps & Readonly<{ variant?: "
       : "landing-focus inline-flex min-h-12 items-center justify-center bg-white px-6 text-sm font-semibold text-[#0355e8] shadow-lg shadow-[#0355e8]/20 transition-colors duration-200 hover:bg-[#1472fa] hover:text-white";
 
   return (
-    <a href={cta.href} className={classes}>
+    <Link href={cta.href as Route} className={classes}>
       {cta.label}
-    </a>
+    </Link>
   );
 }
 
-export function PublicHeader({ cta }: CtaProps) {
+export function PublicHeader() {
   return (
-    <header className="relative bg-white">
-      <a href="#contenido" className="landing-focus sr-only focus:not-sr-only focus:absolute focus:left-6 focus:top-4 focus:z-10 focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-[#0355e8]">
-        Saltar al contenido principal
-      </a>
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-6">
-        <a href="/" className="landing-focus flex min-h-12 items-center gap-3" aria-label="AdPropIA inicio">
-          <span className="size-10 border border-[#0b1738]/20 bg-[#0b1738] shadow-lg shadow-[#0355e8]/20" aria-hidden="true" />
-          <span className="flex flex-col leading-tight">
-            <strong className="text-base tracking-[-0.04em] text-[#0b1738]">AdPropIA</strong>
-            <span className="text-xs font-medium text-[#0355e8]">Gestión inmobiliaria</span>
-          </span>
-        </a>
-        <nav aria-label="Navegación principal" className="hidden items-center gap-7 text-sm font-semibold text-[#0b1738] sm:flex">
-          <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#control">Control</a>
-          <a className="landing-focus inline-flex min-h-11 items-center transition-colors duration-200 hover:text-[#0355e8]" href="#proceso">Proceso</a>
-          <a className="landing-focus inline-flex min-h-11 items-center text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href={cta.href}>{cta.label}</a>
-        </nav>
-      </div>
-    </header>
+    <PublicSiteHeader eyebrow="Gestión inmobiliaria">
+      <PublicSiteNav items={PUBLIC_HOME_NAV_ITEMS} />
+    </PublicSiteHeader>
   );
 }
 
@@ -74,7 +64,7 @@ export function LandingHero({ cta }: CtaProps) {
     <section aria-labelledby="landing-title" className="overflow-hidden bg-white">
       <div className="mx-auto grid max-w-6xl gap-14 px-6 pb-20 pt-12 md:grid-cols-[0.95fr_1.05fr] md:pb-24 md:pt-20">
         <div className="max-w-3xl">
-          <p className="mb-6 text-sm font-semibold uppercase tracking-[0.32em] text-[#0355e8]">SaaS inmobiliario multi-cliente</p>
+          <p className="mb-6 text-sm font-semibold uppercase tracking-[0.32em] text-[#0355e8]">SaaS inmobiliario operativo</p>
           <h1 id="landing-title" className="landing-balance text-5xl font-semibold leading-[0.92] tracking-[-0.075em] text-[#0b1738] sm:text-7xl">
             Control inmobiliario para operar cartera, contratos y caja
           </h1>
@@ -86,6 +76,7 @@ export function LandingHero({ cta }: CtaProps) {
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <CtaLink cta={cta} />
+            <CtaLink cta={pricingCta} variant="secondary" />
             <a className="landing-focus inline-flex min-h-12 items-center px-1 text-sm font-semibold text-[#0355e8] transition-colors duration-200 hover:text-[#1472fa]" href="#control">Ver cómo ordena la operación</a>
           </div>
         </div>
@@ -175,9 +166,12 @@ export function FinalCta({ cta }: CtaProps) {
         <div>
           <p className="mb-4 text-sm font-semibold uppercase tracking-[0.28em] text-[#0355e8]">Control sin teatro visual</p>
           <h2 id="final-cta-title" className="landing-balance text-4xl font-semibold tracking-[-0.055em]">Ordená la operación antes de escalarla</h2>
-          <p className="landing-pretty mt-4 max-w-2xl leading-7">AdPropIA prepara una base sólida para crecer sin mezclar clientes, datos ni responsabilidades.</p>
+          <p className="landing-pretty mt-4 max-w-2xl leading-7">AdPropIA prepara una base sólida para crecer con procesos, datos y responsabilidades claras.</p>
         </div>
-        <CtaLink cta={cta} />
+        <div className="flex flex-wrap items-center gap-4 md:justify-end">
+          <CtaLink cta={cta} />
+          <CtaLink cta={{ href: "/pricing", label: "Comparar planes" }} variant="secondary" />
+        </div>
       </div>
       <div className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-[#0b1738]/10 pt-5 text-xs font-medium text-[#0b1738]/60 sm:flex-row sm:items-center sm:justify-between">
         <p>© AdPropIA</p>

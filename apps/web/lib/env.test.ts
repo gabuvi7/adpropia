@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseServerEnv } from "./env";
+import { parseClientEnv, parseServerEnv } from "./env";
 
 describe("parseServerEnv", () => {
   const validEnv: Record<string, string> = {
@@ -54,5 +54,17 @@ describe("parseServerEnv", () => {
 
   it("throws when ADPROPIA_API_BASE_URL is not a valid URL", () => {
     expect(() => parseServerEnv({ ...validEnv, ADPROPIA_API_BASE_URL: "" })).toThrow();
+  });
+});
+
+describe("parseClientEnv", () => {
+  it("requires the public Turnstile site key for the request-access form", () => {
+    const result = parseClientEnv({ NEXT_PUBLIC_TURNSTILE_SITE_KEY: "site-key" });
+
+    expect(result.NEXT_PUBLIC_TURNSTILE_SITE_KEY).toBe("site-key");
+  });
+
+  it("throws when the public Turnstile site key is empty", () => {
+    expect(() => parseClientEnv({ NEXT_PUBLIC_TURNSTILE_SITE_KEY: "" })).toThrow();
   });
 });

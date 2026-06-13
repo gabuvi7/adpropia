@@ -17,8 +17,10 @@ import { IndicesModule } from "./modules/indices/indices.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { AccessRequestsModule } from "./modules/access-requests/access-requests.module";
 
 export const appModules = [
+  AccessRequestsModule,
   AdminModule,
   TenantsModule,
   PersonasModule,

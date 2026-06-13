@@ -9,6 +9,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import type { AuthRole } from "./auth-role";
+import { IS_PUBLIC_KEY } from "./public.decorator";
 import { RequestContextService } from "../request-context/request-context.service";
 import { hasMinimumRole } from "./permissions";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
@@ -46,6 +47,15 @@ export class RolesGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass()
+    ]);
+
+    if (isPublic === true) {
+      return true;
+    }
+
     const requiredRoles = this.reflector.getAllAndOverride<AuthRole[] | undefined>(
       REQUIRES_ROLE_KEY,
       [context.getHandler(), context.getClass()]

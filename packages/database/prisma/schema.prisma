@@ -136,6 +136,52 @@ enum ContractAdjustmentState {
   RECONCILED
 }
 
+enum AccessPlan {
+  INICIAL
+  PROFESIONAL
+  OPERATIVO
+  A_MEDIDA
+}
+
+enum AccessRequestModule {
+  RENTALS_AND_CONTRACTS
+  INDEXES_AND_ADJUSTMENTS
+  COLLECTIONS_PAYMENTS_CASH
+  OWNER_LIQUIDATIONS
+  REPORTS_AND_AUDIT
+  SALE_UNIT_MANAGEMENT
+  AUTOMATIONS_AND_REMINDERS
+}
+
+enum AccessRequestStatus {
+  RECEIVED
+  REVIEWED
+  DISCARDED
+}
+
+model AccessRequest {
+  id                          String                @id @default(cuid())
+  companyName                 String
+  contactName                 String
+  email                       String
+  phone                       String
+  rentalAdministrationUnits   Int
+  saleUnits                   Int
+  users                       Int
+  selectedModules             AccessRequestModule[]
+  recommendedPlan             AccessPlan
+  status                      AccessRequestStatus   @default(RECEIVED)
+  turnstileChallengeTs        DateTime?
+  turnstileHostname           String?
+  notificationSentAt          DateTime?
+  createdAt                   DateTime              @default(now())
+  updatedAt                   DateTime              @updatedAt
+
+  @@index([email])
+  @@index([status, createdAt])
+  @@map("access_requests")
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   auth0OrgId   String?      @unique

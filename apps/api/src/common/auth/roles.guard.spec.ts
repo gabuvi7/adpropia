@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RequestContextService } from "../request-context/request-context.service";
 import { RequestContextService as RequestContextServiceToken } from "../request-context/request-context.service";
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
+import { IS_PUBLIC_KEY } from "./public.decorator";
 import { RolesGuard, AUTH_ROLE_ENFORCEMENT_KEY } from "./roles.guard";
 
 type ReflectorMock = {
@@ -116,6 +117,24 @@ describe("RolesGuard", () => {
         expect.any(Array)
       );
       expect(config.get).toHaveBeenCalledWith(AUTH_ROLE_ENFORCEMENT_KEY);
+    });
+
+    it("permite una ruta marcada como pública sin exigir roles ni contexto", () => {
+      const reflector = createReflectorMock();
+      reflector.getAllAndOverride.mockImplementation((key: string) => {
+        if (key === IS_PUBLIC_KEY) return true;
+        if (key === REQUIRES_ROLE_KEY) return undefined;
+        return undefined;
+      });
+      const ctxService = createContextServiceMock(undefined);
+      const guard = createGuard(reflector, ctxService, config);
+
+      const result = guard.canActivate(createExecutionContext("submitAccessRequest"));
+
+      expect(result).toBe(true);
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(reflector.getAllAndOverride).toHaveBeenCalledWith(IS_PUBLIC_KEY, expect.any(Array));
     });
 
     it("rechaza con ForbiddenException si el handler tiene metadata @RequiresRole pero el rol es insuficiente", () => {
