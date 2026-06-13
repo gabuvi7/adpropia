@@ -252,9 +252,12 @@ function PlansSection() {
       <div className="mx-auto max-w-6xl">
         <p className={sectionEyebrowClass}>Planes mensuales</p>
         <h2 id="plans-title" className={`${sectionTitleClass} max-w-3xl`}>Una base según unidades administradas y usuarios</h2>
-        <div className="mt-12 grid gap-5 md:grid-cols-2">
+        <p className="mt-6 text-sm leading-6 text-[#0b1738]/62 md:hidden">Deslizá para comparar planes.</p>
+        <div className="-mx-6 mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-px-6 px-6 pb-4 md:mx-0 md:mt-12 md:grid md:snap-none md:grid-cols-2 md:gap-5 md:overflow-visible md:px-0 md:pb-0">
           {pricingPlans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
+            <div key={plan.id} className="min-w-[min(22rem,calc(100vw-3rem))] snap-start md:min-w-0 md:snap-align-none">
+              <PlanCard plan={plan} />
+            </div>
           ))}
         </div>
       </div>
