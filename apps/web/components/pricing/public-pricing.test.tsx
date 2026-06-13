@@ -41,11 +41,13 @@ describe("PublicPricing", () => {
   it("renders plan cards with operational fit and scannable limits", () => {
     const html = renderPricing();
 
-    expect(html).toContain("Para empezar con una base ordenada de alquileres, cobros y contratos.");
-    expect(html).toContain("Para equipos que coordinan más unidades, usuarios y tareas repetidas.");
-    expect(html).toContain("Para operaciones con mayor volumen y seguimiento diario más exigente.");
+    expect(html).toContain("Para empezar con una base ordenada de alquileres, cobros, contratos e índices.");
+    expect(html).toContain("Para equipos que coordinan más unidades, usuarios, liquidaciones e índices.");
+    expect(html).toContain("Para operaciones con mayor volumen, ajustes por índices y seguimiento diario más exigente.");
     expect(html).toContain("Primeros 3 meses");
-    expect(html).toContain("Orden operativo sin sumar complejidad.");
+    expect(html).toContain("actualizaciones de índices preparadas");
+    expect(html).toContain("actualizaciones por IPC, ICL, UVA o reglas propias");
+    expect(html).toContain("actualizaciones automáticas");
     expect(html).toContain("Incluye");
     expect(html).toContain("Unidades");
     expect(html).toContain("Hasta 50");

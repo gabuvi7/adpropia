@@ -18,29 +18,29 @@ const sectionTitleClass = "landing-balance mt-4 text-4xl font-semibold tracking-
 const planPresentation = {
   INICIAL: {
     eyebrow: "Casa y primeras unidades",
-    fit: "Para empezar con una base ordenada de alquileres, cobros y contratos.",
-    outcome: "Orden operativo sin sumar complejidad.",
-    illustration: "house",
+    fit: "Para empezar con una base ordenada de alquileres, cobros, contratos e índices.",
+    outcome: "Orden operativo con actualizaciones de índices preparadas sin sumar complejidad.",
+    illustration: "starter",
   },
   PROFESIONAL: {
     eyebrow: "Edificio en crecimiento",
-    fit: "Para equipos que coordinan más unidades, usuarios y tareas repetidas.",
-    outcome: "Reportes, liquidaciones y automatismos con mejor control.",
-    illustration: "building",
+    fit: "Para equipos que coordinan más unidades, usuarios, liquidaciones e índices.",
+    outcome: "Automatismos para preparar actualizaciones por IPC, ICL, UVA o reglas propias con mejor control.",
+    illustration: "growth",
   },
   OPERATIVO: {
     eyebrow: "Cartera operativa",
-    fit: "Para operaciones con mayor volumen y seguimiento diario más exigente.",
-    outcome: "Más trazabilidad para revisar reportes, auditoría y recordatorios.",
-    illustration: "portfolio",
+    fit: "Para operaciones con mayor volumen, ajustes por índices y seguimiento diario más exigente.",
+    outcome: "Más trazabilidad para revisar reportes, auditoría, recordatorios y actualizaciones automáticas.",
+    illustration: "operations",
   },
   A_MEDIDA: {
     eyebrow: "Operación extendida",
     fit: "Para equipos que superan los límites públicos o necesitan condiciones específicas.",
     outcome: "Alcance definido según volumen y forma de trabajo.",
-    illustration: "network",
+    illustration: "custom",
   },
-} as const satisfies Record<PublicPricingPlan["id"], { eyebrow: string; fit: string; outcome: string; illustration: "house" | "building" | "portfolio" | "network" }>;
+} as const satisfies Record<PublicPricingPlan["id"], { eyebrow: string; fit: string; outcome: string; illustration: "starter" | "growth" | "operations" | "custom" }>;
 
 function PricingCta({ label = "Solicitar acceso" }: Readonly<{ label?: string }>) {
   return (
@@ -54,26 +54,44 @@ function PricingCta({ label = "Solicitar acceso" }: Readonly<{ label?: string }>
 }
 
 function PlanIllustration({ type }: Readonly<{ type: (typeof planPresentation)[PublicPricingPlan["id"]]["illustration"] }>) {
-  const columnsByType = {
-    house: [18, 30, 12],
-    building: [34, 48, 28],
-    portfolio: [44, 30, 54],
-    network: [24, 40, 56],
-  }[type];
-
   return (
     <div className="grid h-12 w-12 shrink-0 place-items-center text-[#0355e8]" aria-hidden="true">
       <svg className="h-12 w-12" viewBox="0 0 80 80" fill="none">
         <path d="M8 68h64" stroke="#0b1738" strokeWidth="4" strokeLinecap="round" opacity="0.18" />
-        <path d="M10 39 25 26l15 13v27H10V39Z" fill="#eef6ff" stroke="currentColor" strokeWidth="3" />
-        <path d="M20 66V51h10v15" fill="#ffffff" stroke="currentColor" strokeWidth="3" />
-        {columnsByType.map((height, index) => {
-          const x = 45 + index * 9;
-          const y = 66 - height;
-
-          return <rect key={`${type}-${x}`} x={x} y={y} width="7" height={height} fill={index === 1 ? "#0355e8" : "#1472fa"} opacity={index === 0 ? 0.72 : 1} />;
-        })}
-        {type === "network" ? <path d="M48 22h18M57 13v36" stroke="#0b1738" strokeWidth="3" strokeLinecap="round" opacity="0.38" /> : null}
+        {type === "starter" ? (
+          <>
+            <path d="M14 39 30 26l16 13v27H14V39Z" fill="#eef6ff" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+            <path d="M25 66V52h10v14" fill="#ffffff" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+            <circle cx="56" cy="42" r="7" stroke="#1472fa" strokeWidth="3" />
+            <path d="M61 47 68 54M65 54h4" stroke="#1472fa" strokeWidth="3" strokeLinecap="round" />
+          </>
+        ) : null}
+        {type === "growth" ? (
+          <>
+            <rect x="18" y="31" width="15" height="35" fill="#eef6ff" stroke="currentColor" strokeWidth="3" />
+            <rect x="37" y="19" width="23" height="47" fill="#ffffff" stroke="currentColor" strokeWidth="3" />
+            <path d="M23 40h5M23 49h5M43 29h5M52 29h3M43 39h5M52 39h3M43 49h5M52 49h3" stroke="#1472fa" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M26 66V57h7M48 66V55h8" stroke="#0b1738" strokeWidth="3" strokeLinecap="round" opacity="0.38" />
+          </>
+        ) : null}
+        {type === "operations" ? (
+          <>
+            <rect x="14" y="23" width="39" height="43" fill="#ffffff" stroke="currentColor" strokeWidth="3" />
+            <path d="M14 34h39" stroke="#0b1738" strokeWidth="3" opacity="0.18" />
+            <path d="M22 45h12M22 54h18" stroke="#1472fa" strokeWidth="3" strokeLinecap="round" />
+            <rect x="46" y="40" width="18" height="26" fill="#eef6ff" stroke="#1472fa" strokeWidth="3" />
+            <path d="M50 53.5 54 57.5 61 48" stroke="#0b1738" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
+          </>
+        ) : null}
+        {type === "custom" ? (
+          <>
+            <circle cx="22" cy="50" r="8" fill="#eef6ff" stroke="currentColor" strokeWidth="3" />
+            <circle cx="41" cy="28" r="9" fill="#ffffff" stroke="currentColor" strokeWidth="3" />
+            <circle cx="61" cy="48" r="8" fill="#eef6ff" stroke="#1472fa" strokeWidth="3" />
+            <path d="M28 44 35 35M48 34 55 42M31 52h22" stroke="#0b1738" strokeWidth="3" strokeLinecap="round" opacity="0.32" />
+            <path d="M41 20v-6M33 28h-6M49 28h6" stroke="#1472fa" strokeWidth="3" strokeLinecap="round" opacity="0.72" />
+          </>
+        ) : null}
       </svg>
     </div>
   );
