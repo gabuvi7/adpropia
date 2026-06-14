@@ -54,7 +54,8 @@ export const REPORTS_PERMISSIONS = {
 export const TENANTS_PERMISSIONS = {
   list: ["ADMIN"] as const,
   read: ["ADMIN"] as const,
-  create: ["OWNER"] as const
+  create: ["OWNER"] as const,
+  updateSettings: ["ADMIN"] as const
 } as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para admin/provisioning endpoints (OWNER-only). */

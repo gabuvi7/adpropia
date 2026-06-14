@@ -11,22 +11,39 @@ const requiredText = (field: string) =>
 
 const optionalText = (message: string) => z.string({ error: message }).trim().min(1, message).optional();
 const optionalRecord = (message: string) => z.record(z.string(), z.unknown(), { error: message }).optional();
+const logoUrlSchema = z.string({ error: "La URL del logo debe ser texto." }).trim().url("La URL del logo no es válida.");
+const defaultCurrencySchema = z.enum(["ARS", "USD"], { error: "La moneda predeterminada no es válida." });
+const defaultCommissionBpsSchema = z
+  .number({ error: "La comisión debe ser un número." })
+  .int("La comisión debe ser un número entero.")
+  .min(0, "La comisión no puede ser negativa.");
 
 export const tenantSettingsSchema = z.object(
   {
     commercialName: requiredText("nombre comercial"),
-    logoUrl: z.string({ error: "La URL del logo debe ser texto." }).trim().url("La URL del logo no es válida.").optional(),
+    logoUrl: logoUrlSchema.optional(),
     primaryColor: optionalText("El color principal no puede estar vacío."),
-    defaultCurrency: z.enum(["ARS", "USD"], { error: "La moneda predeterminada no es válida." }).default("ARS"),
-    defaultCommissionBps: z
-      .number({ error: "La comisión debe ser un número." })
-      .int("La comisión debe ser un número entero.")
-      .min(0, "La comisión no puede ser negativa.")
-      .default(0),
+    defaultCurrency: defaultCurrencySchema.default("ARS"),
+    defaultCommissionBps: defaultCommissionBpsSchema.default(0),
     operationalParameters: optionalRecord("Los parámetros operativos no son válidos.")
   },
   { error: requiredMessage("La configuración de la inmobiliaria es obligatoria.", "La configuración enviada no es válida.") }
 );
+
+export const updateTenantSettingsSchema = z
+  .object(
+    {
+      commercialName: requiredText("nombre comercial").optional(),
+      logoUrl: logoUrlSchema.optional(),
+      primaryColor: optionalText("El color principal no puede estar vacío."),
+      defaultCurrency: defaultCurrencySchema.optional(),
+      defaultCommissionBps: defaultCommissionBpsSchema.optional(),
+      operationalParameters: optionalRecord("Los parámetros operativos no son válidos.")
+    },
+    { error: requiredMessage("La configuración de la inmobiliaria es obligatoria.", "La configuración enviada no es válida.") }
+  )
+  .strict()
+  .refine((settings) => Object.keys(settings).length > 0, "Tenés que enviar al menos un campo de configuración.");
 
 export const createTenantSchema = z.object(
   {
@@ -39,6 +56,7 @@ export const createTenantSchema = z.object(
 );
 
 export type CreateTenantDto = z.infer<typeof createTenantSchema>;
+export type UpdateTenantSettingsDto = z.infer<typeof updateTenantSettingsSchema>;
 
 export class CreateTenantRequest {
   name!: string;

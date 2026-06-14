@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post } from "@nestjs/common";
 import { RequiresRole } from "../../common/auth/roles.decorator";
 import { TENANTS_PERMISSIONS } from "../../common/auth/permissions";
 import { parseRequestBody } from "../../common/validation/zod-validation";
-import { createTenantSchema } from "./tenants.dto";
+import { createTenantSchema, updateTenantSettingsSchema } from "./tenants.dto";
 import { TenantsService } from "./tenants.service";
 
 @Controller("tenants")
@@ -25,5 +25,11 @@ export class TenantsController {
   @RequiresRole(...TENANTS_PERMISSIONS.read)
   getById(@Param("id") id: string) {
     return this.tenantsService.getTenantById(id);
+  }
+
+  @Patch("settings")
+  @RequiresRole(...TENANTS_PERMISSIONS.updateSettings)
+  updateSettings(@Body() body: unknown) {
+    return this.tenantsService.updateCurrentTenantSettings(parseRequestBody(updateTenantSettingsSchema, body));
   }
 }

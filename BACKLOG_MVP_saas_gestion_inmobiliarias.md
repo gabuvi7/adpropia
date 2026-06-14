@@ -45,9 +45,9 @@ El MVP debe priorizar:
 
 | Estado | User Stories |
 | --- | --- |
-| ✅ Hechas | US-001, US-002, US-004, US-010, US-011, US-012, US-013, US-014, US-016, US-017, US-018, US-019, US-022, US-023, US-024, US-025, US-026, US-028, US-029, US-030 |
+| ✅ Hechas | US-001, US-002, US-004, US-010, US-011, US-012, US-013, US-014, US-016, US-017, US-018, US-019, US-022, US-023, US-024, US-025, US-026, US-028, US-029, US-030, US-031, US-032 |
 | 🟡 Parciales | US-003, US-006, US-007, US-008, US-015 |
-| ⬜ Pendientes | US-005, US-009, US-020, US-021, US-027, US-031, US-032, US-033, US-034, US-035, US-036, US-037 |
+| ⬜ Pendientes | US-005, US-009, US-020, US-021, US-027, US-033, US-034, US-035, US-036, US-037, US-038, US-039 |
 
 > Nota: se considera “parcial” cuando hay modelo, helper o endpoint inicial, pero falta completar el comportamiento final del criterio de aceptación. No nos hacemos trampa, porque ahí es donde los proyectos se desordenan.
 
@@ -68,6 +68,8 @@ El MVP debe priorizar:
 11. Reportes básicos.
 12. Auditoría y seguridad operativa.
 13. Onboarding del tenant piloto.
+14. Comunicaciones y recordatorios.
+15. Suscripción y facturación SaaS.
 
 ---
 
@@ -635,7 +637,7 @@ El MVP debe priorizar:
 
 ## Épica 12 — Auditoría y seguridad operativa
 
-### ⬜ US-031 — Registrar auditoría de acciones sensibles
+### ✅ US-031 — Registrar auditoría de acciones sensibles
 
 **Prioridad:** P0  
 **Como** plataforma,  
@@ -648,9 +650,11 @@ El MVP debe priorizar:
 - Cada registro incluye usuario, tenant, entidad, acción, fecha y metadata relevante.
 - La auditoría no puede ser editada por usuarios comunes.
 
+**Estado:** hecho. Hay auditoría persistente para pagos, liquidaciones, contratos, alta de tenant, provisioning de membresías/roles y cambios de settings, con metadata allowlist y lectura restringida a SUPERADMIN.
+
 ---
 
-### ⬜ US-032 — Logs con contexto operativo
+### ✅ US-032 — Logs con contexto operativo
 
 **Prioridad:** P1  
 **Como** equipo técnico,  
@@ -662,6 +666,8 @@ El MVP debe priorizar:
 - Los logs incluyen contexto mínimo.
 - No se loguean secretos ni información sensible innecesaria.
 - Los errores críticos se reportan a herramienta de monitoreo.
+
+**Estado:** hecho. Existe logging estructurado por request con `requestId`, `tenantId`, `userId`, `role`, método, path sin query, status y duración, y tests que evitan body/headers/cookies/query sensibles. Sentry queda integrado como herramienta de monitoreo de errores críticos, deshabilitado de forma segura cuando no hay `SENTRY_DSN` configurado.
 
 ---
 
@@ -696,6 +702,55 @@ El MVP debe priorizar:
 - Se cargan propietarios, propiedades, inquilinos y contratos mínimos.
 - Se validan datos cargados con la inmobiliaria.
 - Se documentan inconsistencias o faltantes.
+
+---
+
+## Épica 14 — Comunicaciones y recordatorios
+
+### ⬜ US-038 — Integrar WhatsApp para recordatorios operativos
+
+**Prioridad:** P1  
+**Como** operador de inmobiliaria,  
+**quiero** enviar recordatorios por WhatsApp,  
+**para** avisar vencimientos, aumentos, deudas y comunicaciones operativas sin seguimiento manual.
+
+**Criterios de aceptación:**
+
+- Se puede configurar el proveedor/canal de WhatsApp por ambiente sin exponer secretos.
+- Se pueden enviar recordatorios de vencimiento de pago.
+- Se pueden enviar avisos de aumento próximo cuando exista cálculo disponible.
+- Se pueden enviar recordatorios de deuda pendiente.
+- Cada mensaje queda asociado a tenant, destinatario, contrato o pago relacionado.
+- Se registra estado del envío: pendiente, enviado, fallido o reintentable.
+- Se respetan plantillas aprobadas y opt-in cuando el proveedor lo requiera.
+- La operación queda auditada y no expone datos sensibles innecesarios en logs.
+
+> Esta US depende de definir proveedor de WhatsApp y reglas de consentimiento/envío. No debe implementarse como envío directo disperso desde servicios de negocio; conviene aislarla detrás de un servicio de comunicaciones.
+
+---
+
+## Épica 15 — Suscripción y facturación SaaS
+
+### ⬜ US-039 — Integrar pasarela de pagos para suscripción SaaS
+
+**Prioridad:** P1  
+**Como** inmobiliaria interesada,  
+**quiero** contratar y pagar la suscripción de AdPropIA con tarjeta o transferencia,  
+**para** activar el servicio sin depender de una gestión manual de GU Solutions.
+
+**Criterios de aceptación:**
+
+- Se puede iniciar una suscripción a un plan de AdPropIA desde el flujo comercial correspondiente.
+- Se soporta pago con tarjeta cuando la pasarela lo permita.
+- Se soporta pago por transferencia o método equivalente cuando la pasarela lo permita.
+- El sistema registra estado de suscripción: pendiente, activa, vencida, cancelada o con pago fallido.
+- Los webhooks de la pasarela actualizan suscripciones y estados de facturación de forma idempotente.
+- No se almacenan datos sensibles de tarjeta en AdPropIA.
+- La suscripción queda asociada al tenant/inmobiliaria correspondiente.
+- El alta del tenant, organización Auth0 y usuarios iniciales se ejecuta solo cuando el pago/alta esté confirmado según la regla definida.
+- La operación queda auditada y permite revisar errores de provisioning sin exponer secretos.
+
+> Falta definir proveedor de pagos y regla de activación. Esta historia es para monetización/suscripción del SaaS, no para cobrar alquileres o pagos de inquilinos.
 
 ---
 
@@ -749,8 +804,10 @@ Liquidaciones PDF, índices y reportes pueden entrar en el segundo corte si el t
 5. Contratos.
 6. Pagos, saldos y movimientos de caja.
 7. Auditoría.
-8. Liquidaciones.
-9. PDFs.
-10. Índices.
-11. Reportes básicos.
-12. Onboarding formal del tenant piloto.
+8. Suscripción y facturación SaaS.
+9. Comunicaciones y recordatorios.
+10. Liquidaciones.
+11. PDFs.
+12. Índices.
+13. Reportes básicos.
+14. Onboarding formal del tenant piloto.

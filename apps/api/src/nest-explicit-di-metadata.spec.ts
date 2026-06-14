@@ -10,6 +10,7 @@ import { Auth0TenantResolver } from "./common/auth0/auth0-tenant-resolver";
 import { PrismaService } from "./common/prisma";
 import { TemporaryHeaderRequestContextMiddleware } from "./common/request-context/request-context.middleware";
 import { RequestContextService } from "./common/request-context/request-context.service";
+import { RequestLoggingMiddleware } from "./common/request-logging/request-logging.middleware";
 import { DOCUMENT_STORAGE } from "./common/storage/document-storage.interface";
 import { AdminProvisioningController } from "./modules/admin/admin-provisioning.controller";
 import { AdminProvisioningService } from "./modules/admin/admin-provisioning.service";
@@ -51,6 +52,7 @@ const explicitInjectionCases: readonly ConstructorTokenCase[] = [
   { subject: Auth0JwtService, tokens: [ConfigService] },
   { subject: Auth0TenantResolver, tokens: [PrismaService] },
   { subject: TemporaryHeaderRequestContextMiddleware, tokens: [RequestContextService] },
+  { subject: RequestLoggingMiddleware, tokens: [RequestContextService] },
   { subject: AdminProvisioningController, tokens: [AdminProvisioningService] },
   { subject: AdminProvisioningService, tokens: [PrismaService, AuditService, RequestContextService] },
   { subject: AuditController, tokens: [AuditService] },

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { normalizeAuthRole, PLATFORM_ROLE_SUPERADMIN, type AuthRole } from "../auth/auth-role";
 import type { RequestContext } from "./request-context";
+import { normalizeRequestIdHeader } from "./request-id";
 
 type HeaderValue = string | string[] | undefined;
 type RequestHeaders = Record<string, HeaderValue>;
@@ -92,7 +93,7 @@ export class RequestContextService {
       tenantId,
       userId: firstHeader(headers["x-user-id"])?.trim() || "usuario-desarrollo",
       role,
-      requestId: firstHeader(headers["x-request-id"])?.trim() || randomUUID()
+      requestId: normalizeRequestIdHeader(headers["x-request-id"]) ?? randomUUID()
     };
   }
 }

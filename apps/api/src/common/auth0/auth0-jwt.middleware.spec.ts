@@ -44,8 +44,11 @@ function createTenantResolverMock(shouldReject = false): Auth0TenantResolver {
   } as unknown as Auth0TenantResolver;
 }
 
-function createRequest(authHeader?: string): { headers: Record<string, string | string[] | undefined> } {
-  return { headers: { ...(authHeader ? { authorization: authHeader } : {}) } };
+function createRequest(
+  authHeader?: string,
+  headers: Record<string, string | string[] | undefined> = {}
+): { headers: Record<string, string | string[] | undefined> } {
+  return { headers: { ...(authHeader ? { authorization: authHeader } : {}), ...headers } };
 }
 
 describe("Auth0JwtMiddleware", () => {
@@ -87,6 +90,84 @@ describe("Auth0JwtMiddleware", () => {
       expect.any(Function)
     );
     expect(next).toHaveBeenCalled();
+  });
+
+  it("uses a safe incoming x-request-id before JWT jti", async () => {
+    const jwtService = createJwtServiceMock();
+    const ctxService = createContextServiceMock();
+    const resolver = createTenantResolverMock();
+    const middleware = new Auth0JwtMiddleware(jwtService, ctxService, resolver);
+
+    await middleware.use(createRequest("Bearer test-token", { "x-request-id": " edge-req_123.456:789 " }), undefined, vi.fn());
+
+    expect(ctxService.run).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "edge-req_123.456:789" }),
+      expect.any(Function)
+    );
+  });
+
+  it("uses the first x-request-id value when proxies provide an array", async () => {
+    const jwtService = createJwtServiceMock();
+    const ctxService = createContextServiceMock();
+    const resolver = createTenantResolverMock();
+    const middleware = new Auth0JwtMiddleware(jwtService, ctxService, resolver);
+
+    await middleware.use(createRequest("Bearer test-token", { "x-request-id": ["proxy-req-1", "proxy-req-2"] }), undefined, vi.fn());
+
+    expect(ctxService.run).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "proxy-req-1" }),
+      expect.any(Function)
+    );
+  });
+
+  it("falls back to JWT jti for invalid, empty, or too-long x-request-id values", async () => {
+    for (const value of ["", "   ", "bad\nrequest", "x".repeat(129)]) {
+      const jwtService = createJwtServiceMock();
+      const ctxService = createContextServiceMock();
+      const resolver = createTenantResolverMock();
+      const middleware = new Auth0JwtMiddleware(jwtService, ctxService, resolver);
+
+      await middleware.use(createRequest("Bearer test-token", { "x-request-id": value }), undefined, vi.fn());
+
+      expect(ctxService.run).toHaveBeenCalledWith(
+        expect.objectContaining({ requestId: "jti-123" }),
+        expect.any(Function)
+      );
+    }
+  });
+
+  it("falls back to a generated request id when x-request-id and JWT jti are unavailable", async () => {
+    const jwtService = createJwtServiceMock({ sub: "auth0|user_xyz", org_id: "org_abc123" });
+    const ctxService = createContextServiceMock();
+    const resolver = createTenantResolverMock();
+    const middleware = new Auth0JwtMiddleware(jwtService, ctxService, resolver);
+
+    await middleware.use(createRequest("Bearer test-token"), undefined, vi.fn());
+
+    expect(ctxService.run).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) }),
+      expect.any(Function)
+    );
+  });
+
+  it("does not surface unsafe request headers through request context", async () => {
+    const jwtService = createJwtServiceMock();
+    const ctxService = createContextServiceMock();
+    const resolver = createTenantResolverMock();
+    const middleware = new Auth0JwtMiddleware(jwtService, ctxService, resolver);
+    const request = createRequest("Bearer secret-token", {
+      "x-request-id": "secret\nheader",
+      cookie: "session=secret"
+    });
+
+    await middleware.use(request, undefined, vi.fn());
+
+    const context = vi.mocked(ctxService.run).mock.calls[0]?.[0];
+    const serializedContext = JSON.stringify(context);
+    expect(serializedContext).not.toContain("secret-token");
+    expect(serializedContext).not.toContain("secret\\nheader");
+    expect(serializedContext).not.toContain("session=secret");
+    expect(context).toEqual(expect.objectContaining({ requestId: "jti-123" }));
   });
 
   it("calls next() without context when no Bearer token and not production", async () => {
