@@ -46,6 +46,47 @@ describe("POST /api/access-requests", () => {
     }));
   });
 
+  it("defaults selected modules for public payloads that omit them", async () => {
+    const { selectedModules: _selectedModules, ...publicPayload } = validPayload;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "access-request-1", recommendedPlan: "PROFESIONAL" }), { status: 201 }));
+
+    const response = await POST(new Request("http://localhost/api/access-requests", {
+      method: "POST",
+      body: JSON.stringify(publicPayload)
+    }));
+
+    expect(response.status).toBe(201);
+    expect(globalThis.fetch).toHaveBeenCalledWith("http://localhost:3001/access-requests", expect.objectContaining({
+      method: "POST",
+      headers: { "content-type": "application/json" }
+    }));
+    const [, proxyInit] = vi.mocked(globalThis.fetch).mock.calls[0]!;
+    expect(JSON.parse(String(proxyInit?.body))).toEqual({
+      ...publicPayload,
+      selectedModules: ["RENTALS_AND_CONTRACTS"]
+    });
+  });
+
+  it("overrides caller-supplied selected modules for public payloads", async () => {
+    const publicPayload = {
+      ...validPayload,
+      selectedModules: ["SALES", "INTERNAL_ADMIN"]
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "access-request-1", recommendedPlan: "PROFESIONAL" }), { status: 201 }));
+
+    const response = await POST(new Request("http://localhost/api/access-requests", {
+      method: "POST",
+      body: JSON.stringify(publicPayload)
+    }));
+
+    expect(response.status).toBe(201);
+    const [, proxyInit] = vi.mocked(globalThis.fetch).mock.calls[0]!;
+    expect(JSON.parse(String(proxyInit?.body))).toEqual({
+      ...validPayload,
+      selectedModules: ["RENTALS_AND_CONTRACTS"]
+    });
+  });
+
   it("returns 400 without proxying invalid request bodies", async () => {
     globalThis.fetch = vi.fn();
 

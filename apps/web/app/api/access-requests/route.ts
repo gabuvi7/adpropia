@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { accessRequestSchema } from "@adpropia/shared";
 import { parseAccessRequestProxyEnv } from "@/lib/env";
 
+export const runtime = "nodejs";
+export const fetchCache = "force-no-store";
+
+const defaultPublicAccessRequestModules = ["RENTALS_AND_CONTRACTS"] as const;
+
 export async function POST(request: Request) {
   const json = await request.json().catch(() => null);
-  const parsed = accessRequestSchema.safeParse(json);
+  const parsed = accessRequestSchema.safeParse(normalizePublicAccessRequestInput(json));
 
   if (!parsed.success) {
     return NextResponse.json({ error: "Los datos enviados no son válidos." }, { status: 400 });
@@ -32,4 +37,13 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "No pudimos conectar con el servidor." }, { status: 502 });
   }
+}
+
+function normalizePublicAccessRequestInput(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+
+  return {
+    ...input,
+    selectedModules: defaultPublicAccessRequestModules
+  };
 }
