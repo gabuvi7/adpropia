@@ -71,10 +71,16 @@ jobs:
         run: pnpm db:generate
       - name: Collect web coverage
         run: pnpm --filter @adpropia/web exec vitest run --coverage --coverage.reporter=lcov --coverage.reportsDirectory=coverage
+      - name: Normalize web coverage paths
+        run: perl -0pi -e 's#^SF:(?!/)#SF:apps/web/#mg' apps/web/coverage/lcov.info
       - name: Collect API coverage
         run: pnpm --filter @adpropia/api exec vitest run --coverage --coverage.reporter=lcov --coverage.reportsDirectory=coverage
+      - name: Normalize API coverage paths
+        run: perl -0pi -e 's#^SF:(?!/)#SF:apps/api/#mg' apps/api/coverage/lcov.info
       - name: Collect shared coverage
         run: pnpm --filter @adpropia/shared exec vitest run --coverage --coverage.reporter=lcov --coverage.reportsDirectory=coverage
+      - name: Normalize shared coverage paths
+        run: perl -0pi -e 's#^SF:(?!/)#SF:packages/shared/#mg' packages/shared/coverage/lcov.info
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
