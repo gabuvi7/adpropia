@@ -229,6 +229,11 @@ describe("@RequiresRole metadata inventory", () => {
       expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, TenantsController.prototype.getById))
         .toEqual([...TENANTS_PERMISSIONS.read]);
     });
+
+    it("updateSettings → TENANTS_PERMISSIONS.updateSettings", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, TenantsController.prototype.updateSettings))
+        .toEqual([...TENANTS_PERMISSIONS.updateSettings]);
+    });
   });
 
   describe("AdminProvisioningController", () => {

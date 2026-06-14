@@ -1,8 +1,11 @@
 import { type MiddlewareConsumer, Module, type NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { APP_GUARD } from "@nestjs/core";
+import { SentryGlobalFilter } from "@sentry/nestjs/setup";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { RequestContextModule } from "./common/request-context/request-context.module";
 import { TemporaryHeaderRequestContextMiddleware } from "./common/request-context/request-context.middleware";
+import { RequestLoggingModule } from "./common/request-logging/request-logging.module";
+import { RequestLoggingMiddleware } from "./common/request-logging/request-logging.middleware";
 import { Auth0Module } from "./common/auth0/auth0.module";
 import { Auth0JwtMiddleware } from "./common/auth0/auth0-jwt.middleware";
 import { RolesGuard } from "./common/auth/roles.guard";
@@ -56,10 +59,15 @@ export const protectedRoutes = [
       cache: true
     }),
     RequestContextModule,
+    RequestLoggingModule,
     Auth0Module,
     ...appModules
   ],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter
+    },
     {
       provide: APP_GUARD,
       useClass: RolesGuard
@@ -74,5 +82,7 @@ export class AppModule implements NestModule {
     consumer
       .apply(Auth0JwtMiddleware, TemporaryHeaderRequestContextMiddleware)
       .forRoutes(...protectedRoutes);
+
+    consumer.apply(RequestLoggingMiddleware).forRoutes("*");
   }
 }

@@ -29,3 +29,11 @@ Do not use root `.env` as shared configuration. It can exist locally for one-off
 - Real env files stay ignored: `.env`, `.env.*`, `apps/api/.env`, `apps/web/.env.local`, and `packages/database/.env`.
 - Example env files are tracked and contain placeholders only.
 - Do not copy Vercel web secrets into Railway API variables, or API secrets into the web app unless that service reads them.
+
+## API Error Monitoring
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `SENTRY_DSN` | Production only | Sentry project DSN. Leave unset, blank, or `null` locally/tests to disable event sending. |
+| `SENTRY_ENVIRONMENT` | No | Optional Sentry environment label, for example `production` or `staging`. |
+| `SENTRY_TRACES_SAMPLE_RATE` | No | Optional Sentry traces sample rate between `0` and `1`; omit unless tracing is intentionally enabled. |
