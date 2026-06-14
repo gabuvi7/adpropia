@@ -3,7 +3,9 @@ import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { SentryGlobalFilter } from "@sentry/nestjs/setup";
 import { describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
+import { IS_PUBLIC_KEY } from "./common/auth/public.decorator";
 import { RolesGuard } from "./common/auth/roles.guard";
+import { HealthController } from "./health.controller";
 
 type ProviderMetadata = Readonly<{
   provide?: unknown;
@@ -12,6 +14,10 @@ type ProviderMetadata = Readonly<{
 
 function getAppProviders(): readonly ProviderMetadata[] {
   return (Reflect.getMetadata(MODULE_METADATA.PROVIDERS, AppModule) ?? []) as ProviderMetadata[];
+}
+
+function getAppControllers(): readonly unknown[] {
+  return (Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, AppModule) ?? []) as unknown[];
 }
 
 describe("AppModule providers", () => {
@@ -29,5 +35,13 @@ describe("AppModule providers", () => {
       provide: APP_GUARD,
       useClass: RolesGuard
     });
+  });
+
+  it("exposes an unprotected health controller for platform probes", () => {
+    expect(getAppControllers()).toContain(HealthController);
+
+    const isPublic = Reflect.getMetadata(IS_PUBLIC_KEY, HealthController.prototype.getHealth);
+
+    expect(isPublic).toBe(true);
   });
 });
