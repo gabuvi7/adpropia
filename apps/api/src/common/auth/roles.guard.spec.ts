@@ -11,6 +11,7 @@ import { RequestContextService as RequestContextServiceToken } from "../request-
 import { REQUIRES_ROLE_KEY } from "./roles.decorator";
 import { IS_PUBLIC_KEY } from "./public.decorator";
 import { RolesGuard, AUTH_ROLE_ENFORCEMENT_KEY } from "./roles.guard";
+import { ADMIN_PROVISIONING_PERMISSIONS } from "./permissions";
 
 type ReflectorMock = {
   getAllAndOverride: ReturnType<typeof vi.fn>;
@@ -172,6 +173,49 @@ describe("RolesGuard", () => {
 
       expect(() => guard.canActivate(createExecutionContext())).toThrow(ForbiddenException);
       expect(warnSpy).toHaveBeenCalled();
+    });
+
+    describe("admin provisioning permissions", () => {
+      it("allows ADMIN to manage provisioning endpoints", () => {
+        const reflector = createReflectorMock();
+        reflector.getAllAndOverride.mockReturnValue([...ADMIN_PROVISIONING_PERMISSIONS.manage] as AuthRole[]);
+        const ctxService = createContextServiceMock({
+          tenantId: "tenant-1", userId: "user-admin", role: "ADMIN", requestId: "req-1"
+        });
+        const guard = createGuard(reflector, ctxService, config);
+
+        expect(guard.canActivate(createExecutionContext("provisionMembership"))).toBe(true);
+        expect(logSpy).toHaveBeenCalled();
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it("allows OWNER to manage provisioning endpoints via hierarchy", () => {
+        const reflector = createReflectorMock();
+        reflector.getAllAndOverride.mockReturnValue([...ADMIN_PROVISIONING_PERMISSIONS.manage] as AuthRole[]);
+        const ctxService = createContextServiceMock({
+          tenantId: "tenant-1", userId: "user-owner", role: "OWNER", requestId: "req-1"
+        });
+        const guard = createGuard(reflector, ctxService, config);
+
+        expect(guard.canActivate(createExecutionContext("provisionMembership"))).toBe(true);
+        expect(logSpy).toHaveBeenCalled();
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it.each(["OPERATOR", "READONLY"] as const)(
+        "rejects %s from managing provisioning endpoints",
+        (role) => {
+          const reflector = createReflectorMock();
+          reflector.getAllAndOverride.mockReturnValue([...ADMIN_PROVISIONING_PERMISSIONS.manage] as AuthRole[]);
+          const ctxService = createContextServiceMock({
+            tenantId: "tenant-1", userId: `user-${role.toLowerCase()}`, role, requestId: "req-1"
+          });
+          const guard = createGuard(reflector, ctxService, config);
+
+          expect(() => guard.canActivate(createExecutionContext("provisionMembership"))).toThrow(ForbiddenException);
+          expect(warnSpy).toHaveBeenCalled();
+        }
+      );
     });
   });
 

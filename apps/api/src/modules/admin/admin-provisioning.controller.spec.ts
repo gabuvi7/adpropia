@@ -20,7 +20,7 @@ function createServiceMock(): AdminProvisioningService {
 
 describe("AdminProvisioningController", () => {
   describe("@RequiresRole metadata", () => {
-    it("linkTenantAuth0Org requires OWNER", () => {
+    it("linkTenantAuth0Org requires ADMIN or higher", () => {
       const metadata = Reflect.getMetadata(
         REQUIRES_ROLE_KEY,
         AdminProvisioningController.prototype.linkTenantAuth0Org
@@ -28,7 +28,7 @@ describe("AdminProvisioningController", () => {
       expect(metadata).toEqual([...ADMIN_PROVISIONING_PERMISSIONS.manage]);
     });
 
-    it("linkUserAuth0Subject requires OWNER", () => {
+    it("linkUserAuth0Subject requires ADMIN or higher", () => {
       const metadata = Reflect.getMetadata(
         REQUIRES_ROLE_KEY,
         AdminProvisioningController.prototype.linkUserAuth0Subject
@@ -36,7 +36,7 @@ describe("AdminProvisioningController", () => {
       expect(metadata).toEqual([...ADMIN_PROVISIONING_PERMISSIONS.manage]);
     });
 
-    it("provisionMembership requires OWNER", () => {
+    it("provisionMembership requires ADMIN or higher", () => {
       const metadata = Reflect.getMetadata(
         REQUIRES_ROLE_KEY,
         AdminProvisioningController.prototype.provisionMembership
