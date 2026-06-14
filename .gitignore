@@ -35,3 +35,5 @@ skill-registry.md
 .stryker-tmp/*
 
 tsconfig.tsbuildinfo
+
+.unlighthouse
