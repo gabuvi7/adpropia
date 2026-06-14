@@ -117,4 +117,20 @@ describe("access request domain", () => {
     expect(result.data.email).toBe("sofia@example.com");
     expect(result.data.selectedModules).toEqual(["RENTALS_AND_CONTRACTS", "SALE_UNIT_MANAGEMENT"]);
   });
+
+  it("rejects phone values without enough digits", () => {
+    const result = accessRequestSchema.safeParse({
+      companyName: "Inmobiliaria Norte",
+      contactName: "Sofía Pérez",
+      email: "sofia@example.com",
+      phone: "telefono",
+      rentalAdministrationUnits: 49,
+      saleUnits: 7,
+      users: 2,
+      selectedModules: ["RENTALS_AND_CONTRACTS"],
+      turnstileToken: "turnstile-token"
+    });
+
+    expect(result.success).toBe(false);
+  });
 });

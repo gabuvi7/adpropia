@@ -49,11 +49,16 @@ export const accessRequestModules: ReadonlyArray<{ value: AccessRequestModule; l
 const requiredTrimmedString = (fieldName: string, maxLength: number) =>
   z.string().trim().min(1, `${fieldName} is required`).max(maxLength, `${fieldName} is too long`);
 
+const phoneSchema = requiredTrimmedString("phone", 60).regex(
+  /^(?=(?:\D*\d){7,})[+\d().\-\s]+$/,
+  "phone must be valid"
+);
+
 export const accessRequestSchema = z.object({
   companyName: requiredTrimmedString("companyName", 120),
   contactName: requiredTrimmedString("contactName", 120),
   email: z.string().trim().toLowerCase().email("email must be valid").max(160, "email is too long"),
-  phone: requiredTrimmedString("phone", 60),
+  phone: phoneSchema,
   rentalAdministrationUnits: z.coerce.number().int().min(0).max(100_000),
   saleUnits: z.coerce.number().int().min(0).max(100_000),
   users: z.coerce.number().int().min(1).max(10_000),
