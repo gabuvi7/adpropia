@@ -3,11 +3,12 @@ import { PrismaModule } from "../../common/prisma";
 import { RequestContextModule } from "../../common/request-context/request-context.module";
 import { ReportsController } from "./reports.controller";
 import { ReportsService } from "./reports.service";
+import { UpcomingAdjustmentsReportService } from "./upcoming-adjustments-report.service";
 
 @Module({
   imports: [PrismaModule, RequestContextModule],
   controllers: [ReportsController],
-  providers: [ReportsService],
+  providers: [ReportsService, UpcomingAdjustmentsReportService],
   exports: [ReportsService]
 })
 export class ReportsModule {}

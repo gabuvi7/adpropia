@@ -9,7 +9,11 @@ const requiredId = (label: string) =>
     .trim()
     .min(1, `${label} es obligatorio.`);
 
-const optionalId = z.string().trim().min(1).optional();
+const optionalId = z
+  .string({ error: "El identificador debe ser texto." })
+  .trim()
+  .min(1, "El identificador no puede estar vacío.")
+  .optional();
 
 const optionalIsoDate = (label: string) =>
   z
@@ -54,7 +58,26 @@ export const outstandingBalancesQuerySchema = z.object({
   asOf: optionalIsoDate("La fecha de corte")
 });
 
+export const upcomingAdjustmentsQuerySchema = z
+  .object({
+    from: optionalIsoDate("La fecha desde"),
+    to: optionalIsoDate("La fecha hasta"),
+    contractId: optionalId,
+    renterId: optionalId,
+    propertyId: optionalId
+  })
+  .refine(
+    (data) => {
+      if (!data.from || !data.to) {
+        return true;
+      }
+      return Date.parse(data.from) <= Date.parse(data.to);
+    },
+    { message: "El rango de fechas no es válido.", path: ["to"] }
+  );
+
 export type RenterHistoryParamsDto = z.infer<typeof renterHistoryParamsSchema>;
 export type UpcomingDuePaymentsQueryDto = z.infer<typeof upcomingDuePaymentsQuerySchema>;
 export type CashFlowQueryDto = z.infer<typeof cashFlowQuerySchema>;
 export type OutstandingBalancesQueryDto = z.infer<typeof outstandingBalancesQuerySchema>;
+export type UpcomingAdjustmentsQueryDto = z.infer<typeof upcomingAdjustmentsQuerySchema>;

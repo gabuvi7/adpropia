@@ -47,7 +47,8 @@ export const REPORTS_PERMISSIONS = {
   renterHistory: ["READONLY"] as const,
   upcomingDuePayments: ["READONLY"] as const,
   cashFlow: ["READONLY"] as const,
-  outstandingBalances: ["READONLY"] as const
+  outstandingBalances: ["READONLY"] as const,
+  upcomingAdjustments: ["READONLY"] as const
 } as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos compartidos para tenants (administración). */
