@@ -21,6 +21,7 @@ import { ReportsModule } from "./modules/reports/reports.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AccessRequestsModule } from "./modules/access-requests/access-requests.module";
+import { HealthController } from "./health.controller";
 
 export const appModules = [
   AccessRequestsModule,
@@ -63,6 +64,7 @@ export const protectedRoutes = [
     Auth0Module,
     ...appModules
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_FILTER,

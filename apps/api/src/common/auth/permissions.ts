@@ -58,9 +58,9 @@ export const TENANTS_PERMISSIONS = {
   updateSettings: ["ADMIN"] as const
 } as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
-/** Permisos compartidos para admin/provisioning endpoints (OWNER-only). */
+/** Permisos compartidos para admin/provisioning endpoints (ADMIN o superior). */
 export const ADMIN_PROVISIONING_PERMISSIONS = {
-  manage: ["OWNER"] as const
+  manage: ["ADMIN"] as const
 } as const satisfies Record<string, ReadonlyArray<AuthRole>>;
 
 /** Permisos de solo SUPERADMIN para audit logs. */
