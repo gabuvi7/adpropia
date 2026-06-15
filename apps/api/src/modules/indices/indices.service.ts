@@ -1,10 +1,11 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, Optional } from "@nestjs/common";
 import type { EconomicIndexType, Prisma } from "@adpropia/database";
 import { PrismaService } from "../../common/prisma";
 import { RequestContextService } from "../../common/request-context/request-context.service";
 
 export type IndexProviderSource = "ARQUILER" | "MANUAL" | "OFFICIAL" | "ARGLY";
 
+export const INDEX_PROVIDER_ADAPTERS = Symbol("INDEX_PROVIDER_ADAPTERS");
 export const INDEX_PROVIDER_PRIORITY: IndexProviderSource[] = ["ARQUILER", "MANUAL", "OFFICIAL", "ARGLY"];
 const SUPPORTED_ECONOMIC_INDEX_TYPES = ["IPC", "ICL", "UVA", "FIXED", "CUSTOM"] satisfies EconomicIndexType[];
 
@@ -48,6 +49,8 @@ export class IndicesService {
     private readonly prisma: PrismaService,
     @Inject(RequestContextService)
     private readonly contextService: RequestContextService,
+    @Optional()
+    @Inject(INDEX_PROVIDER_ADAPTERS)
     private readonly adapters: IndexProviderAdapter[] = []
   ) {}
 

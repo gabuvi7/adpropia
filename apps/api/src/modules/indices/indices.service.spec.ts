@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
+import { ArglyIndexProviderAdapter } from "./argly-index-provider.adapter";
 import { INDEX_PROVIDER_PRIORITY, IndicesService, type IndexProviderAdapter } from "./indices.service";
 
 type TxClient = {
@@ -410,4 +411,179 @@ describe("IndicesService.detectPublishedIndex", () => {
     expect(detected).toEqual(expect.objectContaining({ source: "OFFICIAL", value: "123.000000" }));
     expect(argly.fetchPublishedIndex).not.toHaveBeenCalled();
   });
+
+  it("uses Argly when higher-priority providers and manual fallback are unavailable", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.customIndexValue.findFirst).mockResolvedValue(null as never);
+    const arquiler = createProvider("ARQUILER", null);
+    const manual = createProvider("MANUAL", null);
+    const official = createProvider("OFFICIAL", null);
+    const argly = createProvider("ARGLY", "122.000000");
+    const service = new IndicesService(prisma, createContextMock("tenant-a"), [argly, official, manual, arquiler]);
+
+    const detected = await service.detectPublishedIndex({ type: "IPC", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+
+    expect(detected).toEqual(expect.objectContaining({ source: "ARGLY", value: "122.000000" }));
+    expect(argly.fetchPublishedIndex).toHaveBeenCalledWith({ type: "IPC", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+  });
 });
+
+describe("ArglyIndexProviderAdapter", () => {
+  it.each([
+    ["ICL", "https://api.argly.com.ar/v1/icl?desde=2026-05-01&hasta=2026-05-01"],
+    ["UVA", "https://api.argly.com.ar/v1/uva?desde=2026-05-01&hasta=2026-05-01"]
+  ] as const)("maps %s range responses to normalized published values", async (type, expectedUrl) => {
+    const fetchClient = createFetchMock({ ok: true, body: { data: [{ fecha: "01/05/2026", valor: "125.25" }] } });
+    const adapter = new ArglyIndexProviderAdapter(fetchClient);
+
+    const value = await adapter.fetchPublishedIndex({ type, periodDate: new Date("2026-05-01T18:30:00.000Z") });
+
+    expect(fetchClient).toHaveBeenCalledWith(expectedUrl, { signal: expect.any(AbortSignal) });
+    expect(value).toEqual({
+      type,
+      periodDate: new Date("2026-05-01T00:00:00.000Z"),
+      value: "125.250000",
+      publishedAt: new Date("2026-05-01T00:00:00.000Z")
+    });
+  });
+
+  it("maps IPC monthly range responses to normalized published values", async () => {
+    const fetchClient = createFetchMock({ ok: true, body: { data: [{ mes: 5, anio: 2026, nombre_mes: "mayo", valor: 2.5 }] } });
+    const adapter = new ArglyIndexProviderAdapter(fetchClient);
+
+    const value = await adapter.fetchPublishedIndex({ type: "IPC", periodDate: new Date("2026-05-18T12:30:00.000Z") });
+
+    expect(fetchClient).toHaveBeenCalledWith("https://api.argly.com.ar/v1/ipc?desde=2026-05&hasta=2026-05", { signal: expect.any(AbortSignal) });
+    expect(value).toEqual({
+      type: "IPC",
+      periodDate: new Date("2026-05-01T00:00:00.000Z"),
+      value: "2.500000",
+      publishedAt: new Date("2026-05-01T00:00:00.000Z")
+    });
+  });
+
+  it("returns null for unsupported index types without calling Argly", async () => {
+    const fetchClient = createFetchMock({ ok: true, body: { data: [{ fecha: "01/05/2026", valor: 125.25 }] } });
+    const adapter = new ArglyIndexProviderAdapter(fetchClient);
+
+    await expect(adapter.fetchPublishedIndex({ type: "FIXED", periodDate: new Date("2026-05-01T00:00:00.000Z") })).resolves.toBeNull();
+
+    expect(fetchClient).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["invalid response", { ok: true, body: { data: [{ mes: 5, anio: 2026 }] } }],
+    ["missing target month", { ok: true, body: { data: [{ mes: 4, anio: 2026, nombre_mes: "abril", valor: 2.5 }] } }],
+    ["invalid numeric value", { ok: true, body: { data: [{ mes: 5, anio: 2026, nombre_mes: "mayo", valor: "not-a-number" }] } }],
+    ["failed fetch", { error: new Error("network unavailable") }],
+    ["non-2xx response", { ok: false, body: { data: [{ mes: 5, anio: 2026, nombre_mes: "mayo", valor: 2.5 }] } }]
+  ])("returns null for IPC %s", async (_name, fetchResult) => {
+    const adapter = new ArglyIndexProviderAdapter(createFetchMock(fetchResult));
+
+    await expect(adapter.fetchPublishedIndex({ type: "IPC", periodDate: new Date("2026-05-01T00:00:00.000Z") })).resolves.toBeNull();
+  });
+
+  it("uses the last valid duplicate IPC month and ignores invalid earlier duplicates", async () => {
+    const adapter = new ArglyIndexProviderAdapter(createFetchMock({
+      ok: true,
+      body: {
+        data: [
+          { mes: 5, anio: 2026, nombre_mes: "mayo", valor: "not-a-number" },
+          { mes: 5, anio: 2026, nombre_mes: "mayo", valor: 2.5 },
+          { mes: 5, anio: 2026, nombre_mes: "mayo", valor: "2.75" }
+        ]
+      }
+    }));
+
+    const value = await adapter.fetchPublishedIndex({ type: "IPC", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+
+    expect(value).toEqual(expect.objectContaining({ value: "2.750000" }));
+  });
+
+  it.each([
+    ["invalid response", { ok: true, body: { data: [{ fecha: "01/05/2026" }] } }],
+    ["failed fetch", { error: new Error("network unavailable") }],
+    ["non-2xx response", { ok: false, body: { data: [{ fecha: "01/05/2026", valor: 125.25 }] } }],
+    ["missing data", { ok: true, body: { data: [] } }],
+    ["invalid date", { ok: true, body: { data: [{ fecha: "32/05/2026", valor: 125.25 }] } }],
+    ["invalid numeric value", { ok: true, body: { data: [{ fecha: "01/05/2026", valor: "not-a-number" }] } }]
+  ])("returns null for %s", async (_name, fetchResult) => {
+    const adapter = new ArglyIndexProviderAdapter(createFetchMock(fetchResult));
+
+    await expect(adapter.fetchPublishedIndex({ type: "ICL", periodDate: new Date("2026-05-01T00:00:00.000Z") })).resolves.toBeNull();
+  });
+
+  it.each(["ICL", "UVA"] as const)("returns null for %s invalid DD/MM/YYYY dates", async (type) => {
+    const adapter = new ArglyIndexProviderAdapter(createFetchMock({ ok: true, body: { data: [{ fecha: "31/02/2026", valor: 125.25 }] } }));
+
+    await expect(adapter.fetchPublishedIndex({ type, periodDate: new Date("2026-02-01T00:00:00.000Z") })).resolves.toBeNull();
+  });
+
+  it("uses the last valid duplicate-date row after normalizing mixed string and number values", async () => {
+    const adapter = new ArglyIndexProviderAdapter(createFetchMock({
+      ok: true,
+      body: {
+        data: [
+          { fecha: "01/05/2026", valor: 124.5 },
+          { fecha: "01/05/2026", valor: "125.75" }
+        ]
+      }
+    }));
+
+    const value = await adapter.fetchPublishedIndex({ type: "ICL", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+
+    expect(value).toEqual(expect.objectContaining({ value: "125.750000" }));
+  });
+
+  it("returns null when an Argly request is aborted by the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchClient = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      }) as unknown as typeof fetch;
+      const adapter = new ArglyIndexProviderAdapter(fetchClient);
+
+      const value = adapter.fetchPublishedIndex({ type: "ICL", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await expect(value).resolves.toBeNull();
+      expect(fetchClient).toHaveBeenCalledWith("https://api.argly.com.ar/v1/icl?desde=2026-05-01&hasta=2026-05-01", { signal: expect.any(AbortSignal) });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns null when Argly response body parsing hangs past the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchClient = vi.fn(async () => ({
+        ok: true,
+        json: () => new Promise<never>(() => undefined)
+      }) as unknown as Response) as unknown as typeof fetch;
+      const adapter = new ArglyIndexProviderAdapter(fetchClient);
+
+      const value = adapter.fetchPublishedIndex({ type: "ICL", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await expect(value).resolves.toBeNull();
+      expect(fetchClient).toHaveBeenCalledWith("https://api.argly.com.ar/v1/icl?desde=2026-05-01&hasta=2026-05-01", { signal: expect.any(AbortSignal) });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+function createFetchMock(result: { ok: boolean; body: unknown } | { error: Error }): typeof fetch {
+  return vi.fn(async () => {
+    if ("error" in result) {
+      throw result.error;
+    }
+
+    return {
+      ok: result.ok,
+      json: async () => result.body
+    } as Response;
+  }) as unknown as typeof fetch;
+}

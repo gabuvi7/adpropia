@@ -21,7 +21,7 @@ import { AuthService } from "./modules/auth/auth.service";
 import { ContractsController } from "./modules/contracts/contracts.controller";
 import { ContractsService } from "./modules/contracts/contracts.service";
 import { IndicesController } from "./modules/indices/indices.controller";
-import { IndicesService } from "./modules/indices/indices.service";
+import { INDEX_PROVIDER_ADAPTERS, IndicesService } from "./modules/indices/indices.service";
 import { LiquidationCalculator } from "./modules/liquidations/calculation/liquidation-calculator";
 import { LiquidationsController } from "./modules/liquidations/liquidations.controller";
 import { LiquidationsService } from "./modules/liquidations/liquidations.service";
@@ -63,7 +63,7 @@ const explicitInjectionCases: readonly ConstructorTokenCase[] = [
   { subject: ContractsController, tokens: [ContractsService] },
   { subject: ContractsService, tokens: [PrismaService, RequestContextService, AuditService] },
   { subject: IndicesController, tokens: [IndicesService] },
-  { subject: IndicesService, tokens: [PrismaService, RequestContextService] },
+  { subject: IndicesService, tokens: [PrismaService, RequestContextService, INDEX_PROVIDER_ADAPTERS] },
   {
     subject: LiquidationsService,
     tokens: [
