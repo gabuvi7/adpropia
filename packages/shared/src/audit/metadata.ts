@@ -95,6 +95,7 @@ export const businessAuditActions = [
   "payment.created",
   "property.created",
   "property.ownership_updated",
+  "property.status.changed",
   "property.updated",
   "rent_payment.recorded",
   "renter.created",

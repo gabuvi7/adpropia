@@ -53,6 +53,11 @@ function createAuditMock(): AuditService {
   } as unknown as AuditService;
 }
 
+const activeContractStatusInclude = {
+  contracts: { where: { status: "ACTIVE" }, select: { id: true }, take: 1 },
+  contractProperties: { where: { contract: { status: "ACTIVE" } }, select: { id: true }, take: 1 }
+};
+
 function mockTransaction(prisma: PrismaService, tx: unknown) {
   vi.mocked(prisma.$transaction as unknown as (cb: (tx: unknown) => unknown) => unknown).mockImplementation(
     async (callback: (tx: unknown) => unknown) => callback(tx)
@@ -136,8 +141,53 @@ describe("PropertiesService", () => {
 
     expect(prisma.property.findMany).toHaveBeenCalledWith({
       where: { tenantId: "tenant-b", deletedAt: null },
-      orderBy: { addressLine: "asc" }
+      orderBy: { addressLine: "asc" },
+      include: activeContractStatusInclude
     });
+  });
+
+  it("returns rented status for listed properties with an active contract", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findMany).mockResolvedValue([
+      {
+        id: "property-1",
+        tenantId: "tenant-b",
+        status: "AVAILABLE",
+        contracts: [{ id: "contract-1" }],
+        contractProperties: []
+      },
+      {
+        id: "property-2",
+        tenantId: "tenant-b",
+        status: "INACTIVE",
+        contracts: [],
+        contractProperties: [{ id: "contract-property-1" }]
+      },
+      { id: "property-3", tenantId: "tenant-b", status: "AVAILABLE", contracts: [], contractProperties: [] }
+    ] as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-b"), createAuditMock());
+
+    await expect(service.listProperties()).resolves.toEqual([
+      expect.objectContaining({ id: "property-1", status: "RENTED" }),
+      expect.objectContaining({ id: "property-2", status: "RENTED" }),
+      expect.objectContaining({ id: "property-3", status: "AVAILABLE" })
+    ]);
+  });
+
+  it("does not return rented status when active contract relations are absent", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findMany).mockResolvedValue([
+      {
+        id: "property-1",
+        tenantId: "tenant-b",
+        status: "AVAILABLE",
+        contracts: [],
+        contractProperties: []
+      }
+    ] as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-b"), createAuditMock());
+
+    await expect(service.listProperties()).resolves.toEqual([expect.objectContaining({ id: "property-1", status: "AVAILABLE" })]);
   });
 
   it("gets properties by id and active tenantId", async () => {
@@ -147,7 +197,21 @@ describe("PropertiesService", () => {
 
     await service.getPropertyById("property-1");
 
-    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-c", deletedAt: null } });
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-c", deletedAt: null }, include: activeContractStatusInclude });
+  });
+
+  it("returns rented status for a requested property with an active contract", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({
+      id: "property-1",
+      tenantId: "tenant-c",
+      status: "AVAILABLE",
+      contracts: [],
+      contractProperties: [{ id: "contract-property-1" }]
+    } as never);
+    const service = new PropertiesService(prisma, createContextMock("tenant-c"), createAuditMock());
+
+    await expect(service.getPropertyById("property-1")).resolves.toEqual(expect.objectContaining({ status: "RENTED" }));
   });
 
   it("throws NotFound when the requested property is missing for the active tenant", async () => {
@@ -157,7 +221,7 @@ describe("PropertiesService", () => {
 
     await expectHttpException(service.getPropertyById("property-1"), NotFoundException, 404, "No encontramos la propiedad solicitada.");
 
-    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-c", deletedAt: null } });
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-c", deletedAt: null }, include: activeContractStatusInclude });
   });
 
   it("finds tenant-scoped properties through the compatibility lookup", async () => {
@@ -167,7 +231,7 @@ describe("PropertiesService", () => {
 
     await expect(service.findPropertyForTenant("property-1")).resolves.toEqual({ id: "property-1", tenantId: "tenant-scope" });
 
-    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-scope", deletedAt: null } });
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-scope", deletedAt: null }, include: activeContractStatusInclude });
   });
 
   it("rejects property creation when the owner is missing, inactive, or from another tenant", async () => {
@@ -196,7 +260,7 @@ describe("PropertiesService", () => {
 
     await service.updateProperty("property-1", { addressLine: "Nueva dirección" });
 
-    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-d", deletedAt: null } });
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-1", tenantId: "tenant-d", deletedAt: null }, include: activeContractStatusInclude });
     expect(tx.property.update).toHaveBeenCalledWith({
       where: { id_tenantId: { id: "property-1", tenantId: "tenant-d" } },
       data: { addressLine: "Nueva dirección" }
@@ -221,7 +285,7 @@ describe("PropertiesService", () => {
       "No encontramos la propiedad solicitada."
     );
 
-    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-missing", tenantId: "tenant-d", deletedAt: null } });
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-missing", tenantId: "tenant-d", deletedAt: null }, include: activeContractStatusInclude });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -245,6 +309,75 @@ describe("PropertiesService", () => {
       where: { id_tenantId: { id: "property-1", tenantId: "tenant-d" } },
       data: { type: "HOUSE", status: "RENTED", city: "Rosario", province: "Santa Fe", postalCode: "2000", commissionBps: 550 }
     });
+  });
+
+  it("audits operational property status changes", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-d", status: "AVAILABLE" } as never);
+    const tx = { property: { update: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-d", status: "INACTIVE" } as never) } };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-d"), audit);
+
+    await service.updateProperty("property-1", { status: "INACTIVE" });
+
+    expect(audit.createEntryWithClient).toHaveBeenCalledWith(tx, expect.objectContaining({ tenantId: "tenant-d" }), {
+      entityType: "property",
+      entityId: "property-1",
+      action: "property.status.changed",
+      metadata: { from: "AVAILABLE", to: "INACTIVE" }
+    });
+  });
+
+  it("does not emit status change audit when the status stays the same", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({ id: "property-1", tenantId: "tenant-d", status: "AVAILABLE" } as never);
+    const tx = { property: { update: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-d", status: "AVAILABLE" } as never) } };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-d"), audit);
+
+    await service.updateProperty("property-1", { status: "AVAILABLE" });
+
+    expect(audit.createEntryWithClient).not.toHaveBeenCalledWith(tx, expect.any(Object), expect.objectContaining({ action: "property.status.changed" }));
+  });
+
+  it("does not audit persisted status changes when an active contract keeps the operational status rented", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({
+      id: "property-1",
+      tenantId: "tenant-d",
+      status: "AVAILABLE",
+      contracts: [{ id: "contract-1" }],
+      contractProperties: []
+    } as never);
+    const tx = { property: { update: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-d", status: "INACTIVE" } as never) } };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-d"), audit);
+
+    await expect(service.updateProperty("property-1", { status: "INACTIVE" })).resolves.toEqual(expect.objectContaining({ status: "RENTED" }));
+
+    expect(audit.createEntryWithClient).not.toHaveBeenCalledWith(tx, expect.any(Object), expect.objectContaining({ action: "property.status.changed" }));
+  });
+
+  it("does not audit setting persisted status to rented when the operational status was already rented", async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    vi.mocked(prisma.property.findFirst).mockResolvedValue({
+      id: "property-1",
+      tenantId: "tenant-d",
+      status: "AVAILABLE",
+      contracts: [],
+      contractProperties: [{ id: "contract-property-1" }]
+    } as never);
+    const tx = { property: { update: vi.fn().mockResolvedValue({ id: "property-1", tenantId: "tenant-d", status: "RENTED" } as never) } };
+    mockTransaction(prisma, tx);
+    const service = new PropertiesService(prisma, createContextMock("tenant-d"), audit);
+
+    await expect(service.updateProperty("property-1", { status: "RENTED" })).resolves.toEqual(expect.objectContaining({ status: "RENTED" }));
+
+    expect(audit.createEntryWithClient).not.toHaveBeenCalledWith(tx, expect.any(Object), expect.objectContaining({ action: "property.status.changed" }));
   });
 
   it("checks new owner id and active tenantId before reassigning properties", async () => {
@@ -360,7 +493,7 @@ describe("PropertiesService", () => {
       "No encontramos la propiedad solicitada."
     );
 
-    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-missing", tenantId: "tenant-a", deletedAt: null } });
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({ where: { id: "property-missing", tenantId: "tenant-a", deletedAt: null }, include: activeContractStatusInclude });
     expect(prisma.rentalContract.count).not.toHaveBeenCalled();
   });
 
