@@ -41,6 +41,7 @@ describe("audit metadata conventions", () => {
     ["payment.created", { contractId: "contract-1", status: "PAID", currency: "ARS" }],
     ["property.created", { ownerPersonaIds: ["persona-1"], serviceTypeIds: [] }],
     ["property.ownership_updated", { ownerPersonaIds: ["persona-1", "persona-2"] }],
+    ["property.status.changed", { from: "AVAILABLE", to: "INACTIVE" }],
     ["property.updated", { changedFields: ["status"] }],
     ["rent_payment.recorded", { rentPeriodId: "period-1", type: "ON_ACCOUNT", currency: "ARS" }],
     ["renter.created", undefined],

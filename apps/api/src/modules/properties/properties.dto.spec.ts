@@ -270,6 +270,14 @@ describe("property DTO validation", () => {
     );
   });
 
+  it("accepts the minimum property states", () => {
+    for (const status of ["AVAILABLE", "RENTED", "INACTIVE"] as const) {
+      expect(
+        updatePropertySchema.safeParse({ status }).success
+      ).toBe(true);
+    }
+  });
+
   it("validates ownership share basis points boundaries and numeric shape", () => {
     const baseUnit = { propertyTypeId: "type-1", addressLine: "Main 1" };
 
