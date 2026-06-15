@@ -205,6 +205,11 @@ describe("@RequiresRole metadata inventory", () => {
       expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getOutstandingBalances))
         .toEqual([...REPORTS_PERMISSIONS.outstandingBalances]);
     });
+
+    it("getUpcomingAdjustments → REPORTS_PERMISSIONS.upcomingAdjustments", () => {
+      expect(Reflect.getMetadata(REQUIRES_ROLE_KEY, ReportsController.prototype.getUpcomingAdjustments))
+        .toEqual([...REPORTS_PERMISSIONS.upcomingAdjustments]);
+    });
   });
 
   describe("AuditController", () => {

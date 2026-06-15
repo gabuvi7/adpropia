@@ -16,10 +16,13 @@ function createPrismaMock() {
 
   const prisma = {
     economicIndex: {
-      findFirst: vi.fn()
+      findUnique: vi.fn()
     },
     rentPeriod: {
       findMany: vi.fn()
+    },
+    customIndexValue: {
+      findFirst: vi.fn()
     },
     $transaction: vi.fn(async (fn: (client: TxClient) => unknown) => fn(tx))
   } as unknown as PrismaService & { __tx: TxClient };
@@ -53,7 +56,7 @@ function createProvider(source: IndexProviderAdapter["source"], value: string | 
 describe("IndicesService.persistPublishedIndex", () => {
   it("persists provider index values idempotently and creates reconciliation trace inputs for estimated periods", async () => {
     const prisma = createPrismaMock();
-    vi.mocked(prisma.economicIndex.findFirst).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
     vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue([
       {
         id: "period-1",
@@ -77,7 +80,7 @@ describe("IndicesService.persistPublishedIndex", () => {
     });
 
     expect(prisma.__tx.customIndexValue.upsert).toHaveBeenCalledWith({
-      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "ARQUILER:IPC:2026-05" } },
+      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "IPC:2026-05" } },
       create: expect.objectContaining({
         tenantId: "tenant-a",
         economicIndexId: "economic-index-ipc",
@@ -85,7 +88,7 @@ describe("IndicesService.persistPublishedIndex", () => {
         value: "125.250000",
         isManual: false,
         source: "ARQUILER",
-        idempotencyKey: "ARQUILER:IPC:2026-05",
+        idempotencyKey: "IPC:2026-05",
         publishedAt: new Date("2026-05-17T12:00:00.000Z")
       }),
       update: expect.objectContaining({ value: "125.250000", publishedAt: new Date("2026-05-17T12:00:00.000Z") })
@@ -120,7 +123,7 @@ describe("IndicesService.persistPublishedIndex", () => {
 
   it("keeps duplicate provider/date persistence idempotent for any day in the period month", async () => {
     const prisma = createPrismaMock();
-    vi.mocked(prisma.economicIndex.findFirst).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
     vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue([] as never);
     prisma.__tx.customIndexValue.upsert.mockResolvedValue({ id: "index-value-1", tenantId: "tenant-a", value: "125.250000" });
     const service = new IndicesService(prisma, createContextMock("tenant-a"));
@@ -137,25 +140,23 @@ describe("IndicesService.persistPublishedIndex", () => {
 
     expect(prisma.__tx.customIndexValue.upsert).toHaveBeenCalledTimes(2);
     expect(prisma.__tx.customIndexValue.upsert).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "ARQUILER:IPC:2026-05" } },
+      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "IPC:2026-05" } },
       create: expect.objectContaining({ periodDate: new Date("2026-05-01T00:00:00.000Z") })
     }));
     expect(prisma.__tx.customIndexValue.upsert).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "ARQUILER:IPC:2026-05" } },
+      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "IPC:2026-05" } },
       update: expect.objectContaining({ value: "125.250000" })
     }));
     expect(prisma.__tx.contractAdjustment.createMany).not.toHaveBeenCalled();
   });
 
-  it("keeps same index/date from different sources independent by source idempotency and manual flag", async () => {
+  it("keeps same index/date from different sources in one schema-valid value row", async () => {
     const prisma = createPrismaMock();
-    vi.mocked(prisma.economicIndex.findFirst)
-      .mockResolvedValueOnce({ id: "economic-index-ipc-arquiler", type: "IPC", name: "IPC", source: "ARQUILER" } as never)
-      .mockResolvedValueOnce({ id: "economic-index-ipc-manual", type: "IPC", name: "IPC", source: "MANUAL" } as never);
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
     vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue([] as never);
     prisma.__tx.customIndexValue.upsert
-      .mockResolvedValueOnce({ id: "index-value-arquiler", tenantId: "tenant-a", value: "125.250000" })
-      .mockResolvedValueOnce({ id: "index-value-manual", tenantId: "tenant-a", value: "124.000000" });
+      .mockResolvedValueOnce({ id: "index-value-ipc", tenantId: "tenant-a", value: "125.250000" })
+      .mockResolvedValueOnce({ id: "index-value-ipc", tenantId: "tenant-a", value: "124.000000" });
     const service = new IndicesService(prisma, createContextMock("tenant-a"));
     const periodDate = new Date("2026-05-01T00:00:00.000Z");
 
@@ -163,18 +164,70 @@ describe("IndicesService.persistPublishedIndex", () => {
     await service.persistPublishedIndex({ source: "MANUAL", type: "IPC", periodDate, value: "124.000000", publishedAt: new Date("2026-05-16T09:00:00.000Z") });
 
     expect(prisma.__tx.customIndexValue.upsert).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "ARQUILER:IPC:2026-05" } },
-      create: expect.objectContaining({ economicIndexId: "economic-index-ipc-arquiler", isManual: false, source: "ARQUILER" })
+      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "IPC:2026-05" } },
+      create: expect.objectContaining({ economicIndexId: "economic-index-ipc", isManual: false, source: "ARQUILER" })
     }));
     expect(prisma.__tx.customIndexValue.upsert).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "MANUAL:IPC:2026-05" } },
-      create: expect.objectContaining({ economicIndexId: "economic-index-ipc-manual", isManual: true, source: "MANUAL" })
+      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "IPC:2026-05" } },
+      create: expect.objectContaining({ economicIndexId: "economic-index-ipc", isManual: true, source: "MANUAL", uploadedById: "user-1" }),
+      update: expect.objectContaining({ isManual: true, source: "MANUAL", uploadedById: "user-1" })
     }));
+  });
+
+  it("persists manual index uploads with manual semantics and uploader trace", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
+    vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue([] as never);
+    prisma.__tx.customIndexValue.upsert.mockResolvedValue({ id: "index-value-manual", tenantId: "tenant-a", value: "124.000000" });
+    const service = new IndicesService(prisma, createContextMock("tenant-a"));
+
+    await service.persistPublishedIndex({
+      source: "MANUAL",
+      type: "IPC",
+      periodDate: new Date("2026-05-19T21:45:00.000Z"),
+      value: "124.000000",
+      publishedAt: new Date("2026-05-16T09:00:00.000Z")
+    });
+
+    expect(prisma.__tx.customIndexValue.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { tenantId_idempotencyKey: { tenantId: "tenant-a", idempotencyKey: "IPC:2026-05" } },
+      create: expect.objectContaining({
+        isManual: true,
+        source: "MANUAL",
+        uploadedById: "user-1",
+        publishedAt: new Date("2026-05-16T09:00:00.000Z")
+      }),
+      update: expect.objectContaining({
+        value: "124.000000",
+        uploadedById: "user-1",
+        publishedAt: new Date("2026-05-16T09:00:00.000Z")
+      })
+    }));
+  });
+
+  it("does not assign the request user as uploader for provider values", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
+    vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue([] as never);
+    prisma.__tx.customIndexValue.upsert.mockResolvedValue({ id: "index-value-1", tenantId: "tenant-a", value: "125.250000" });
+    const service = new IndicesService(prisma, createContextMock("tenant-a"));
+
+    await service.persistPublishedIndex({
+      source: "ARQUILER",
+      type: "IPC",
+      periodDate: new Date("2026-05-01T00:00:00.000Z"),
+      value: "125.250000",
+      publishedAt: new Date("2026-05-17T12:00:00.000Z")
+    });
+
+    const upsertInput = prisma.__tx.customIndexValue.upsert.mock.calls[0]?.[0];
+    expect(upsertInput.create).not.toHaveProperty("uploadedById");
+    expect(upsertInput.update).toHaveProperty("uploadedById", null);
   });
 
   it("preserves manual trace source and estimated amount inputs for each pending reconciliation", async () => {
     const prisma = createPrismaMock();
-    vi.mocked(prisma.economicIndex.findFirst).mockResolvedValue({ id: "economic-index-ipc-manual", type: "IPC", name: "IPC", source: "MANUAL" } as never);
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue({ id: "economic-index-ipc", type: "IPC", name: "IPC", source: "ARQUILER" } as never);
     vi.mocked(prisma.rentPeriod.findMany).mockResolvedValue([
       {
         id: "period-1",
@@ -238,7 +291,26 @@ describe("IndicesService.persistPublishedIndex", () => {
       value: "125.250000",
       publishedAt: new Date("2026-05-17T12:00:00.000Z")
     })).rejects.toThrow("El tipo de índice económico no es válido.");
-    expect(prisma.economicIndex.findFirst).not.toHaveBeenCalled();
+    expect(prisma.economicIndex.findUnique).not.toHaveBeenCalled();
+    expect(prisma.__tx.customIndexValue.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects persistence with a Spanish user-facing message when the economic index configuration is missing", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.economicIndex.findUnique).mockResolvedValue(null as never);
+    const service = new IndicesService(prisma, createContextMock("tenant-a"));
+
+    await expect(service.persistPublishedIndex({
+      source: "ARQUILER",
+      type: "IPC",
+      periodDate: new Date("2026-05-01T00:00:00.000Z"),
+      value: "125.250000",
+      publishedAt: new Date("2026-05-17T12:00:00.000Z")
+    })).rejects.toThrow("No encontramos la configuración del índice económico solicitado.");
+    expect(prisma.economicIndex.findUnique).toHaveBeenCalledWith({
+      where: { type_name: { type: "IPC", name: "IPC" } }
+    });
+    expect(prisma.rentPeriod.findMany).not.toHaveBeenCalled();
     expect(prisma.__tx.customIndexValue.upsert).not.toHaveBeenCalled();
   });
 });
@@ -278,6 +350,38 @@ describe("IndicesService.detectPublishedIndex", () => {
 
     expect(detected).toEqual(expect.objectContaining({ source: "MANUAL", value: "124.000000" }));
     expect(manual.fetchPublishedIndex).toHaveBeenCalledWith({ type: "IPC", periodDate: new Date("2026-05-01T00:00:00.000Z") });
+  });
+
+  it("uses persisted manual values as fallback when the primary provider is unavailable", async () => {
+    const prisma = createPrismaMock();
+    vi.mocked(prisma.customIndexValue.findFirst).mockResolvedValue({
+      value: "124.000000",
+      publishedAt: new Date("2026-05-16T09:00:00.000Z"),
+      updatedAt: new Date("2026-05-16T10:00:00.000Z")
+    } as never);
+    const arquiler = createProvider("ARQUILER", null);
+    const service = new IndicesService(prisma, createContextMock("tenant-a"), [arquiler]);
+
+    const detected = await service.detectPublishedIndex({ type: "IPC", periodDate: new Date("2026-05-19T21:45:00.000Z") });
+
+    expect(detected).toEqual({
+      source: "MANUAL",
+      type: "IPC",
+      periodDate: new Date("2026-05-01T00:00:00.000Z"),
+      value: "124.000000",
+      publishedAt: new Date("2026-05-16T09:00:00.000Z")
+    });
+    expect(prisma.customIndexValue.findFirst).toHaveBeenCalledWith({
+      where: {
+        tenantId: "tenant-a",
+        periodDate: new Date("2026-05-01T00:00:00.000Z"),
+        source: "MANUAL",
+        isManual: true,
+        economicIndex: { type: "IPC", name: "IPC" }
+      },
+      select: { value: true, publishedAt: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" }
+    });
   });
 
   it("keeps official and Argly lower priority than manual fallback", async () => {

@@ -14,8 +14,10 @@ import { RequestContextService } from "../../common/request-context/request-cont
 import type {
   CashFlowQueryDto,
   OutstandingBalancesQueryDto,
+  UpcomingAdjustmentsQueryDto,
   UpcomingDuePaymentsQueryDto
 } from "./reports.dto";
+import { UpcomingAdjustmentsReportService, type UpcomingAdjustmentsReport } from "./upcoming-adjustments-report.service";
 
 const DEFAULT_RANGE_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -97,7 +99,9 @@ export class ReportsService {
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
     @Inject(RequestContextService)
-    private readonly contextService: RequestContextService
+    private readonly contextService: RequestContextService,
+    @Inject(UpcomingAdjustmentsReportService)
+    private readonly upcomingAdjustmentsReportService: UpcomingAdjustmentsReportService
   ) {}
 
   // US-013 — Historial de inquilino.
@@ -349,6 +353,11 @@ export class ReportsService {
       total: items.length,
       items
     };
+  }
+
+  // US-021 — Aumentos próximos por fecha de ajuste configurada en contrato.
+  async getUpcomingAdjustments(query: UpcomingAdjustmentsQueryDto): Promise<UpcomingAdjustmentsReport> {
+    return this.upcomingAdjustmentsReportService.getUpcomingAdjustments(query);
   }
 }
 

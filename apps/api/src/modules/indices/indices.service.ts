@@ -32,6 +32,15 @@ interface EstimatedRentPeriodForReconciliation {
   estimatedIndexSource: string | null;
 }
 
+interface PublishedIndexPersistenceContext {
+  tenantId: string;
+  userId: string;
+  economicIndex: Prisma.EconomicIndexGetPayload<object>;
+  periodDate: Date;
+  idempotencyKey: string;
+  estimatedPeriods: EstimatedRentPeriodForReconciliation[];
+}
+
 @Injectable()
 export class IndicesService {
   constructor(
@@ -45,13 +54,16 @@ export class IndicesService {
   async detectPublishedIndex(input: IndexProviderLookupInput): Promise<PublishedIndexValue | null> {
     for (const source of INDEX_PROVIDER_PRIORITY) {
       const adapter = this.adapters.find((candidate) => candidate.source === source);
-      if (!adapter) {
-        continue;
-      }
-
-      const value = await adapter.fetchPublishedIndex(input);
+      const value = adapter ? await adapter.fetchPublishedIndex(input) : null;
       if (value) {
         return { ...value, source };
+      }
+
+      if (source === "MANUAL") {
+        const manualValue = await this.findManualPublishedIndex(input);
+        if (manualValue) {
+          return manualValue;
+        }
       }
     }
 
@@ -65,26 +77,50 @@ export class IndicesService {
   }
 
   async persistPublishedIndex(input: PublishedIndexValue): Promise<unknown> {
-    if (!SUPPORTED_ECONOMIC_INDEX_TYPES.includes(input.type)) {
+    this.assertSupportedEconomicIndexType(input.type);
+    const { tenantId, userId } = this.contextService.get();
+    const periodDate = startOfMonth(input.periodDate);
+
+    const persistenceContext: PublishedIndexPersistenceContext = {
+      tenantId,
+      userId,
+      periodDate,
+      idempotencyKey: buildIndexIdempotencyKey(input.type, periodDate),
+      economicIndex: await this.resolveEconomicIndex(input.type),
+      estimatedPeriods: await this.findEstimatedPeriodsForReconciliation(tenantId, input.type, periodDate)
+    };
+
+    return this.persistIndexValueWithReconciliation(input, persistenceContext);
+  }
+
+  private assertSupportedEconomicIndexType(type: EconomicIndexType): void {
+    if (!SUPPORTED_ECONOMIC_INDEX_TYPES.includes(type)) {
       throw new BadRequestException("El tipo de índice económico no es válido.");
     }
+  }
 
-    const { tenantId } = this.contextService.get();
-    const economicIndex = await this.prisma.economicIndex.findFirst({
-      where: { type: input.type, name: input.type, source: input.source }
+  private async resolveEconomicIndex(type: EconomicIndexType): Promise<Prisma.EconomicIndexGetPayload<object>> {
+    const economicIndex = await this.prisma.economicIndex.findUnique({
+      where: { type_name: { type, name: type } }
     });
 
     if (!economicIndex) {
-      throw new BadRequestException("No encontramos la configuración del índice económico para esa fuente.");
+      throw new BadRequestException("No encontramos la configuración del índice económico solicitado.");
     }
 
-    const periodDate = startOfMonth(input.periodDate);
-    const idempotencyKey = buildIndexIdempotencyKey(input.source, input.type, periodDate);
-    const estimatedPeriods = (await this.prisma.rentPeriod.findMany({
+    return economicIndex;
+  }
+
+  private async findEstimatedPeriodsForReconciliation(
+    tenantId: string,
+    type: EconomicIndexType,
+    periodDate: Date
+  ): Promise<EstimatedRentPeriodForReconciliation[]> {
+    return (await this.prisma.rentPeriod.findMany({
       where: {
         tenantId,
         calculationState: "ESTIMATED",
-        estimatedIndexType: input.type,
+        estimatedIndexType: type,
         periodStart: periodDate
       },
       select: {
@@ -95,39 +131,111 @@ export class IndicesService {
         estimatedIndexSource: true
       }
     })) as unknown as EstimatedRentPeriodForReconciliation[];
+  }
 
+  private persistIndexValueWithReconciliation(
+    input: PublishedIndexValue,
+    context: PublishedIndexPersistenceContext
+  ): Promise<unknown> {
     return this.prisma.$transaction(async (tx) => {
-      const indexValue = await tx.customIndexValue.upsert({
-        where: { tenantId_idempotencyKey: { tenantId, idempotencyKey } },
-        create: {
-          tenantId,
-          economicIndexId: economicIndex.id,
-          periodDate,
-          value: input.value,
-          isManual: input.source === "MANUAL",
-          source: input.source,
-          idempotencyKey,
-          publishedAt: input.publishedAt
-        },
-        update: {
-          value: input.value,
-          publishedAt: input.publishedAt,
-          metadata: { source: input.source, type: input.type }
-        }
-      });
-
-      if (estimatedPeriods.length > 0) {
-        await tx.contractAdjustment.createMany({
-          data: estimatedPeriods.map((period) =>
-            toContractAdjustmentTraceCreateData(period, tenantId, input, indexValue.id)
-          ),
-          skipDuplicates: true
-        });
-      }
+      const indexValue = await this.upsertPublishedIndexValue(tx, input, context);
+      await this.createReconciliationTraces(tx, input, context, indexValue.id);
 
       return indexValue;
     });
   }
+
+  private upsertPublishedIndexValue(
+    tx: Prisma.TransactionClient,
+    input: PublishedIndexValue,
+    context: PublishedIndexPersistenceContext
+  ) {
+    const uploadTrace = toUploadTrace(input.source, context.userId);
+
+    return tx.customIndexValue.upsert({
+      where: { tenantId_idempotencyKey: { tenantId: context.tenantId, idempotencyKey: context.idempotencyKey } },
+      create: {
+        tenantId: context.tenantId,
+        economicIndexId: context.economicIndex.id,
+        periodDate: context.periodDate,
+        value: input.value,
+        isManual: input.source === "MANUAL",
+        source: input.source,
+        idempotencyKey: context.idempotencyKey,
+        publishedAt: input.publishedAt,
+        ...uploadTrace.create
+      },
+      update: {
+        value: input.value,
+        isManual: input.source === "MANUAL",
+        source: input.source,
+        publishedAt: input.publishedAt,
+        ...uploadTrace.update,
+        metadata: { source: input.source, type: input.type }
+      }
+    });
+  }
+
+  private async createReconciliationTraces(
+    tx: Prisma.TransactionClient,
+    input: PublishedIndexValue,
+    context: PublishedIndexPersistenceContext,
+    economicIndexValueId: string
+  ): Promise<void> {
+    if (context.estimatedPeriods.length === 0) {
+      return;
+    }
+
+    await tx.contractAdjustment.createMany({
+      data: context.estimatedPeriods.map((period) =>
+        toContractAdjustmentTraceCreateData(period, context.tenantId, input, economicIndexValueId)
+      ),
+      skipDuplicates: true
+    });
+  }
+
+  private async findManualPublishedIndex(input: IndexProviderLookupInput): Promise<PublishedIndexValue | null> {
+    const { tenantId } = this.contextService.get();
+    const periodDate = startOfMonth(input.periodDate);
+    const indexValue = await this.prisma.customIndexValue.findFirst({
+      where: {
+        tenantId,
+        periodDate,
+        source: "MANUAL",
+        isManual: true,
+        economicIndex: { type: input.type, name: input.type }
+      },
+      select: {
+        value: true,
+        publishedAt: true,
+        updatedAt: true
+      },
+      orderBy: { updatedAt: "desc" }
+    });
+
+    if (!indexValue) {
+      return null;
+    }
+
+    return {
+      source: "MANUAL",
+      type: input.type,
+      periodDate,
+      value: indexValue.value.toString(),
+      publishedAt: indexValue.publishedAt ?? indexValue.updatedAt
+    };
+  }
+}
+
+function toUploadTrace(
+  source: IndexProviderSource,
+  userId: string
+): { create: { uploadedById: string } | Record<string, never>; update: { uploadedById: string | null } } {
+  if (source === "MANUAL") {
+    return { create: { uploadedById: userId }, update: { uploadedById: userId } };
+  }
+
+  return { create: {}, update: { uploadedById: null } };
 }
 
 function toContractAdjustmentTraceCreateData(
@@ -155,9 +263,9 @@ function toContractAdjustmentTraceCreateData(
   };
 }
 
-function buildIndexIdempotencyKey(source: IndexProviderSource, type: EconomicIndexType, periodDate: Date): string {
+function buildIndexIdempotencyKey(type: EconomicIndexType, periodDate: Date): string {
   const month = `${periodDate.getUTCFullYear()}-${String(periodDate.getUTCMonth() + 1).padStart(2, "0")}`;
-  return `${source}:${type}:${month}`;
+  return `${type}:${month}`;
 }
 
 function startOfMonth(value: Date): Date {

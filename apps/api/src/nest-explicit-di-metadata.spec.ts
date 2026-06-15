@@ -37,6 +37,7 @@ import { PropertiesController } from "./modules/properties/properties.controller
 import { PropertiesService } from "./modules/properties/properties.service";
 import { ReportsController } from "./modules/reports/reports.controller";
 import { ReportsService } from "./modules/reports/reports.service";
+import { UpcomingAdjustmentsReportService } from "./modules/reports/upcoming-adjustments-report.service";
 import { TenantsController } from "./modules/tenants/tenants.controller";
 import { TenantsService } from "./modules/tenants/tenants.service";
 
@@ -85,7 +86,7 @@ const explicitInjectionCases: readonly ConstructorTokenCase[] = [
   { subject: PropertiesController, tokens: [PropertiesService] },
   { subject: PropertiesService, tokens: [PrismaService, RequestContextService, AuditService] },
   { subject: ReportsController, tokens: [ReportsService] },
-  { subject: ReportsService, tokens: [PrismaService, RequestContextService] },
+  { subject: ReportsService, tokens: [PrismaService, RequestContextService, UpcomingAdjustmentsReportService] },
   { subject: TenantsController, tokens: [TenantsService] },
   { subject: TenantsService, tokens: [PrismaService, AuditService, RequestContextService] }
 ];

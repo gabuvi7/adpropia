@@ -6,6 +6,7 @@ import {
   cashFlowQuerySchema,
   outstandingBalancesQuerySchema,
   renterHistoryParamsSchema,
+  upcomingAdjustmentsQuerySchema,
   upcomingDuePaymentsQuerySchema
 } from "./reports.dto";
 import { ReportsService } from "./reports.service";
@@ -19,7 +20,7 @@ export class ReportsController {
   getRenterHistory(@Param("renterId") renterId: string) {
     const parsed = parseRequestBody(renterHistoryParamsSchema, { renterId });
     return this.reportsService.getRenterHistory(parsed.renterId);
-}
+  }
 
   @Get("upcoming-due-payments")
   @RequiresRole(...REPORTS_PERMISSIONS.upcomingDuePayments)
@@ -37,5 +38,11 @@ export class ReportsController {
   @RequiresRole(...REPORTS_PERMISSIONS.outstandingBalances)
   getOutstandingBalances(@Query() query: unknown) {
     return this.reportsService.getOutstandingBalances(parseRequestBody(outstandingBalancesQuerySchema, query));
+  }
+
+  @Get("upcoming-adjustments")
+  @RequiresRole(...REPORTS_PERMISSIONS.upcomingAdjustments)
+  getUpcomingAdjustments(@Query() query: unknown) {
+    return this.reportsService.getUpcomingAdjustments(parseRequestBody(upcomingAdjustmentsQuerySchema, query));
   }
 }

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../../common/prisma";
 import type { RequestContextService } from "../../common/request-context/request-context.service";
 import { ReportsService } from "./reports.service";
+import type { UpcomingAdjustmentsReportService } from "./upcoming-adjustments-report.service";
 
 function createPrismaMock() {
   return {
@@ -25,6 +26,16 @@ function createContextMock(tenantId = "tenant-a") {
   return {
     get: () => ({ requestId: "req-1", userId: "user-1", tenantId, role: "ADMIN" })
   } as RequestContextService;
+}
+
+function createUpcomingAdjustmentsReportServiceMock() {
+  return {
+    getUpcomingAdjustments: vi.fn()
+  } as unknown as UpcomingAdjustmentsReportService;
+}
+
+function createReportsService(prisma: PrismaService, context: RequestContextService, upcomingAdjustmentsReportService = createUpcomingAdjustmentsReportServiceMock()) {
+  return new ReportsService(prisma, context, upcomingAdjustmentsReportService);
 }
 
 describe("ReportsService.getRenterHistory", () => {
@@ -70,7 +81,7 @@ describe("ReportsService.getRenterHistory", () => {
       }
     ] as never);
 
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
     const result = await service.getRenterHistory("renter-1");
 
     expect(prisma.renter.findUnique).toHaveBeenCalledWith({
@@ -91,7 +102,7 @@ describe("ReportsService.getRenterHistory", () => {
   it("throws NotFound when the renter does not exist for the active tenant", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.renter.findUnique).mockResolvedValue(null);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     await expect(service.getRenterHistory("renter-x")).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -106,7 +117,7 @@ describe("ReportsService.getRenterHistory", () => {
       phone: null,
       deletedAt: new Date()
     } as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     await expect(service.getRenterHistory("renter-1")).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -137,7 +148,7 @@ describe("ReportsService.getRenterHistory", () => {
       { id: "p2", currency: "ARS", status: "PARTIAL", dueAmount: "100000.00", paidAmount: "10000.00", remainingDebt: "90000.00", creditBalance: "0.00" }
     ] as never);
 
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
     const result = await service.getRenterHistory("renter-1");
 
     expect(result.totals).toEqual({
@@ -154,7 +165,7 @@ describe("ReportsService.getUpcomingDuePayments", () => {
   it("filters by tenant, status PENDING/PARTIAL and date range, ordered ascending by dueAt", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-b"));
+    const service = createReportsService(prisma, createContextMock("tenant-b"));
 
     await service.getUpcomingDuePayments({
       from: "2026-04-01T00:00:00.000Z",
@@ -175,7 +186,7 @@ describe("ReportsService.getUpcomingDuePayments", () => {
   it("applies optional filters (contractId, renterId, propertyId via contract relation)", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-c"));
+    const service = createReportsService(prisma, createContextMock("tenant-c"));
 
     await service.getUpcomingDuePayments({
       from: "2026-04-01T00:00:00.000Z",
@@ -201,7 +212,7 @@ describe("ReportsService.getUpcomingDuePayments", () => {
 
   it("rejects when from is greater than to", async () => {
     const prisma = createPrismaMock();
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     await expect(
       service.getUpcomingDuePayments({ from: "2026-05-30T00:00:00.000Z", to: "2026-05-01T00:00:00.000Z" })
@@ -212,7 +223,7 @@ describe("ReportsService.getUpcomingDuePayments", () => {
   it("uses a default range of today + 30 days when no from/to is provided", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const before = Date.now();
     const result = await service.getUpcomingDuePayments({});
@@ -233,7 +244,7 @@ describe("ReportsService.getUpcomingDuePayments", () => {
       { id: "pay-2", dueAt: new Date("2026-04-10T00:00:00.000Z"), contract: { id: "c1", propertyId: "p1", renterId: "r1", ownerId: "o1" } }
     ];
     vi.mocked(prisma.payment.findMany).mockResolvedValue(sample as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getUpcomingDuePayments({
       from: "2026-04-01T00:00:00.000Z",
@@ -258,7 +269,7 @@ describe("ReportsService.getCashFlow", () => {
       { id: "m5", type: "OWNER_PAYOUT", amount: "30000.00", currency: "ARS", occurredAt: new Date("2026-04-20T00:00:00.000Z") },
       { id: "m6", type: "ADJUSTMENT", amount: "1000.00", currency: "ARS", occurredAt: new Date("2026-04-21T00:00:00.000Z") }
     ] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getCashFlow({ month: "2026-04" });
 
@@ -285,7 +296,7 @@ describe("ReportsService.getCashFlow", () => {
   it("queries the right month range (UTC start/end of month)", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.cashMovement.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-z"));
+    const service = createReportsService(prisma, createContextMock("tenant-z"));
 
     await service.getCashFlow({ month: "2026-02" });
 
@@ -304,7 +315,7 @@ describe("ReportsService.getCashFlow", () => {
   it("returns zero totals (formatted '0.00') when there are no movements", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.cashMovement.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getCashFlow({ month: "2026-04" });
 
@@ -326,11 +337,38 @@ describe("ReportsService.getCashFlow", () => {
       { id: "m1", type: "INCOME", amount: "100000.00", currency: "ARS", occurredAt: new Date() },
       { id: "m2", type: "INCOME", amount: "1000.00", currency: "USD", occurredAt: new Date() }
     ] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getCashFlow({ month: "2026-04" });
 
     expect(result.currency).toBe("ARS");
+  });
+});
+
+describe("ReportsService.getUpcomingAdjustments", () => {
+  it("delegates upcoming adjustments report generation to the focused collaborator", async () => {
+    const prisma = createPrismaMock();
+    const upcomingAdjustmentsReportService = createUpcomingAdjustmentsReportServiceMock();
+    vi.mocked(upcomingAdjustmentsReportService.getUpcomingAdjustments).mockResolvedValue({
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T23:59:59.999Z",
+      total: 0,
+      items: []
+    });
+    const service = createReportsService(prisma, createContextMock("tenant-b"), upcomingAdjustmentsReportService);
+    const query = {
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T23:59:59.999Z",
+      contractId: "contract-1",
+      renterId: "renter-1",
+      propertyId: "property-1"
+    };
+
+    const result = await service.getUpcomingAdjustments(query);
+
+    expect(upcomingAdjustmentsReportService.getUpcomingAdjustments).toHaveBeenCalledWith(query);
+    expect(result.total).toBe(0);
+    expect(prisma.rentalContract.findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -376,7 +414,7 @@ describe("ReportsService.getOutstandingBalances", () => {
         ]
       }
     ] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getOutstandingBalances({ asOf: "2026-04-01T00:00:00.000Z" });
 
@@ -393,7 +431,7 @@ describe("ReportsService.getOutstandingBalances", () => {
   it("applies optional filters (propertyId, ownerId)", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-d"));
+    const service = createReportsService(prisma, createContextMock("tenant-d"));
 
     await service.getOutstandingBalances({
       propertyId: "prop-7",
@@ -428,7 +466,7 @@ describe("ReportsService.getOutstandingBalances", () => {
         ]
       }
     ] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getOutstandingBalances({ asOf: "2026-04-01T00:00:00.000Z" });
 
@@ -453,7 +491,7 @@ describe("ReportsService.getOutstandingBalances", () => {
         ]
       }
     ] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getOutstandingBalances({ asOf: "2026-04-20T00:00:00.000Z" });
 
@@ -477,7 +515,7 @@ describe("ReportsService.getOutstandingBalances", () => {
         ]
       }
     ] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const result = await service.getOutstandingBalances({});
 
@@ -488,7 +526,7 @@ describe("ReportsService.getOutstandingBalances", () => {
   it("uses now as default asOf when omitted", async () => {
     const prisma = createPrismaMock();
     vi.mocked(prisma.rentalContract.findMany).mockResolvedValue([] as never);
-    const service = new ReportsService(prisma, createContextMock("tenant-a"));
+    const service = createReportsService(prisma, createContextMock("tenant-a"));
 
     const before = Date.now();
     const result = await service.getOutstandingBalances({});
